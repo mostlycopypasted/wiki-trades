@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500" width="100%" height="100%" style="background-color: #0f172a; font-family: Inter, system-ui, -apple-system, sans-serif;">
+
+<style>
+  .grid-line { stroke: #334155; stroke-width: 1; stroke-dasharray: 4,4; }
+  .axis-line { stroke: #475569; stroke-width: 1.5; }
+  .axis-text { fill: #94a3b8; font-size: 11px; }
+  .title-text { fill: #f8fafc; font-size: 16px; font-weight: 700; }
+  .line-series { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; transition: opacity 0.2s, stroke-width 0.2s; }
+  .line-series:hover { stroke-width: 4; opacity: 1 !important; }
+  .series-dot { stroke-width: 2; transition: r 0.2s; }
+  .series-dot:hover { r: 6; }
+  .legend-text { fill: #cbd5e1; font-size: 12px; font-weight: 500; cursor: pointer; }
+  .legend-item:hover text { fill: #ffffff; }
+</style>
+
+<text x="60" y="30" class="title-text">Currency Strength Trend History</text>
+<line x1="60" y1="440.0" x2="740" y2="440.0" class="grid-line" />
+<text x="50" y="444.0" text-anchor="end" class="axis-text">-7</text>
+<line x1="60" y1="384.2857142857143" x2="740" y2="384.2857142857143" class="grid-line" />
+<text x="50" y="388.2857142857143" text-anchor="end" class="axis-text">-5</text>
+<line x1="60" y1="328.57142857142856" x2="740" y2="328.57142857142856" class="grid-line" />
+<text x="50" y="332.57142857142856" text-anchor="end" class="axis-text">-3</text>
+<line x1="60" y1="272.8571428571429" x2="740" y2="272.8571428571429" class="grid-line" />
+<text x="50" y="276.8571428571429" text-anchor="end" class="axis-text">-1</text>
+<line x1="60" y1="217.14285714285717" x2="740" y2="217.14285714285717" class="grid-line" />
+<text x="50" y="221.14285714285717" text-anchor="end" class="axis-text">+1</text>
+<line x1="60" y1="161.42857142857144" x2="740" y2="161.42857142857144" class="grid-line" />
+<text x="50" y="165.42857142857144" text-anchor="end" class="axis-text">+3</text>
+<line x1="60" y1="105.71428571428572" x2="740" y2="105.71428571428572" class="grid-line" />
+<text x="50" y="109.71428571428572" text-anchor="end" class="axis-text">+5</text>
+<line x1="60" y1="50.0" x2="740" y2="50.0" class="grid-line" />
+<text x="50" y="54.0" text-anchor="end" class="axis-text">+7</text>
+<line x1="60" y1="245.0" x2="740" y2="245.0" class="axis-line" />
+<text x="60.0" y="460" text-anchor="middle" class="axis-text">10/05</text>
+<line x1="60.0" y1="440" x2="60.0" y2="445" class="axis-line" />
+<text x="173.33333333333331" y="460" text-anchor="middle" class="axis-text">17/05</text>
+<line x1="173.33333333333331" y1="440" x2="173.33333333333331" y2="445" class="axis-line" />
+<text x="286.66666666666663" y="460" text-anchor="middle" class="axis-text">24/05</text>
+<line x1="286.66666666666663" y1="440" x2="286.66666666666663" y2="445" class="axis-line" />
+<text x="400.0" y="460" text-anchor="middle" class="axis-text">31/05</text>
+<line x1="400.0" y1="440" x2="400.0" y2="445" class="axis-line" />
+<text x="513.3333333333333" y="460" text-anchor="middle" class="axis-text">07/06</text>
+<line x1="513.3333333333333" y1="440" x2="513.3333333333333" y2="445" class="axis-line" />
+<text x="626.6666666666667" y="460" text-anchor="middle" class="axis-text">21/06</text>
+<line x1="626.6666666666667" y1="440" x2="626.6666666666667" y2="445" class="axis-line" />
+<text x="740.0" y="460" text-anchor="middle" class="axis-text">28/06</text>
+<line x1="740.0" y1="440" x2="740.0" y2="445" class="axis-line" />
+<path d="M 60.0 272.8571428571429 L 173.33333333333331 245.0 L 286.66666666666663 217.14285714285717 L 400.0 245.0 L 513.3333333333333 217.14285714285717 L 626.6666666666667 217.14285714285717 L 740.0 217.14285714285717" class="line-series" stroke="#3b82f6" id="series-EUR" />
+<circle cx="60.0" cy="272.8571428571429" r="4" fill="#0f172a" stroke="#3b82f6" class="series-dot" id="dot-EUR-0"><title>EUR: -1 (2026-05-10)</title></circle>
+<circle cx="173.33333333333331" cy="245.0" r="4" fill="#0f172a" stroke="#3b82f6" class="series-dot" id="dot-EUR-1"><title>EUR: 0 (2026-05-17)</title></circle>
+<circle cx="286.66666666666663" cy="217.14285714285717" r="4" fill="#0f172a" stroke="#3b82f6" class="series-dot" id="dot-EUR-2"><title>EUR: 1 (2026-05-24)</title></circle>
+<circle cx="400.0" cy="245.0" r="4" fill="#0f172a" stroke="#3b82f6" class="series-dot" id="dot-EUR-3"><title>EUR: 0 (2026-05-31)</title></circle>
+<circle cx="513.3333333333333" cy="217.14285714285717" r="4" fill="#0f172a" stroke="#3b82f6" class="series-dot" id="dot-EUR-4"><title>EUR: 1 (2026-06-07)</title></circle>
+<circle cx="626.6666666666667" cy="217.14285714285717" r="4" fill="#0f172a" stroke="#3b82f6" class="series-dot" id="dot-EUR-5"><title>EUR: 1 (2026-06-21)</title></circle>
+<circle cx="740.0" cy="217.14285714285717" r="4" fill="#0f172a" stroke="#3b82f6" class="series-dot" id="dot-EUR-6"><title>EUR: 1 (2026-06-28)</title></circle>
+<path d="M 60.0 217.14285714285717 L 173.33333333333331 300.7142857142857 L 286.66666666666663 272.8571428571429 L 400.0 300.7142857142857 L 513.3333333333333 189.28571428571428 L 626.6666666666667 300.7142857142857 L 740.0 217.14285714285717" class="line-series" stroke="#ef4444" id="series-GBP" />
+<circle cx="60.0" cy="217.14285714285717" r="4" fill="#0f172a" stroke="#ef4444" class="series-dot" id="dot-GBP-0"><title>GBP: 1 (2026-05-10)</title></circle>
+<circle cx="173.33333333333331" cy="300.7142857142857" r="4" fill="#0f172a" stroke="#ef4444" class="series-dot" id="dot-GBP-1"><title>GBP: -2 (2026-05-17)</title></circle>
+<circle cx="286.66666666666663" cy="272.8571428571429" r="4" fill="#0f172a" stroke="#ef4444" class="series-dot" id="dot-GBP-2"><title>GBP: -1 (2026-05-24)</title></circle>
+<circle cx="400.0" cy="300.7142857142857" r="4" fill="#0f172a" stroke="#ef4444" class="series-dot" id="dot-GBP-3"><title>GBP: -2 (2026-05-31)</title></circle>
+<circle cx="513.3333333333333" cy="189.28571428571428" r="4" fill="#0f172a" stroke="#ef4444" class="series-dot" id="dot-GBP-4"><title>GBP: 2 (2026-06-07)</title></circle>
+<circle cx="626.6666666666667" cy="300.7142857142857" r="4" fill="#0f172a" stroke="#ef4444" class="series-dot" id="dot-GBP-5"><title>GBP: -2 (2026-06-21)</title></circle>
+<circle cx="740.0" cy="217.14285714285717" r="4" fill="#0f172a" stroke="#ef4444" class="series-dot" id="dot-GBP-6"><title>GBP: 1 (2026-06-28)</title></circle>
+<path d="M 60.0 77.85714285714283 L 173.33333333333331 77.85714285714283 L 286.66666666666663 133.57142857142856 L 400.0 161.42857142857144 L 513.3333333333333 272.8571428571429 L 626.6666666666667 189.28571428571428 L 740.0 300.7142857142857" class="line-series" stroke="#10b981" id="series-AUD" />
+<circle cx="60.0" cy="77.85714285714283" r="4" fill="#0f172a" stroke="#10b981" class="series-dot" id="dot-AUD-0"><title>AUD: 6 (2026-05-10)</title></circle>
+<circle cx="173.33333333333331" cy="77.85714285714283" r="4" fill="#0f172a" stroke="#10b981" class="series-dot" id="dot-AUD-1"><title>AUD: 6 (2026-05-17)</title></circle>
+<circle cx="286.66666666666663" cy="133.57142857142856" r="4" fill="#0f172a" stroke="#10b981" class="series-dot" id="dot-AUD-2"><title>AUD: 4 (2026-05-24)</title></circle>
+<circle cx="400.0" cy="161.42857142857144" r="4" fill="#0f172a" stroke="#10b981" class="series-dot" id="dot-AUD-3"><title>AUD: 3 (2026-05-31)</title></circle>
+<circle cx="513.3333333333333" cy="272.8571428571429" r="4" fill="#0f172a" stroke="#10b981" class="series-dot" id="dot-AUD-4"><title>AUD: -1 (2026-06-07)</title></circle>
+<circle cx="626.6666666666667" cy="189.28571428571428" r="4" fill="#0f172a" stroke="#10b981" class="series-dot" id="dot-AUD-5"><title>AUD: 2 (2026-06-21)</title></circle>
+<circle cx="740.0" cy="300.7142857142857" r="4" fill="#0f172a" stroke="#10b981" class="series-dot" id="dot-AUD-6"><title>AUD: -2 (2026-06-28)</title></circle>
+<path d="M 60.0 189.28571428571428 L 173.33333333333331 245.0 L 286.66666666666663 272.8571428571429 L 400.0 133.57142857142856 L 513.3333333333333 161.42857142857144 L 626.6666666666667 272.8571428571429 L 740.0 328.57142857142856" class="line-series" stroke="#f59e0b" id="series-NZD" />
+<circle cx="60.0" cy="189.28571428571428" r="4" fill="#0f172a" stroke="#f59e0b" class="series-dot" id="dot-NZD-0"><title>NZD: 2 (2026-05-10)</title></circle>
+<circle cx="173.33333333333331" cy="245.0" r="4" fill="#0f172a" stroke="#f59e0b" class="series-dot" id="dot-NZD-1"><title>NZD: 0 (2026-05-17)</title></circle>
+<circle cx="286.66666666666663" cy="272.8571428571429" r="4" fill="#0f172a" stroke="#f59e0b" class="series-dot" id="dot-NZD-2"><title>NZD: -1 (2026-05-24)</title></circle>
+<circle cx="400.0" cy="133.57142857142856" r="4" fill="#0f172a" stroke="#f59e0b" class="series-dot" id="dot-NZD-3"><title>NZD: 4 (2026-05-31)</title></circle>
+<circle cx="513.3333333333333" cy="161.42857142857144" r="4" fill="#0f172a" stroke="#f59e0b" class="series-dot" id="dot-NZD-4"><title>NZD: 3 (2026-06-07)</title></circle>
+<circle cx="626.6666666666667" cy="272.8571428571429" r="4" fill="#0f172a" stroke="#f59e0b" class="series-dot" id="dot-NZD-5"><title>NZD: -1 (2026-06-21)</title></circle>
+<circle cx="740.0" cy="328.57142857142856" r="4" fill="#0f172a" stroke="#f59e0b" class="series-dot" id="dot-NZD-6"><title>NZD: -3 (2026-06-28)</title></circle>
+<path d="M 60.0 412.14285714285717 L 173.33333333333331 328.57142857142856 L 286.66666666666663 300.7142857142857 L 400.0 272.8571428571429 L 513.3333333333333 133.57142857142856 L 626.6666666666667 133.57142857142856 L 740.0 133.57142857142856" class="line-series" stroke="#8b5cf6" id="series-USD" />
+<circle cx="60.0" cy="412.14285714285717" r="4" fill="#0f172a" stroke="#8b5cf6" class="series-dot" id="dot-USD-0"><title>USD: -6 (2026-05-10)</title></circle>
+<circle cx="173.33333333333331" cy="328.57142857142856" r="4" fill="#0f172a" stroke="#8b5cf6" class="series-dot" id="dot-USD-1"><title>USD: -3 (2026-05-17)</title></circle>
+<circle cx="286.66666666666663" cy="300.7142857142857" r="4" fill="#0f172a" stroke="#8b5cf6" class="series-dot" id="dot-USD-2"><title>USD: -2 (2026-05-24)</title></circle>
+<circle cx="400.0" cy="272.8571428571429" r="4" fill="#0f172a" stroke="#8b5cf6" class="series-dot" id="dot-USD-3"><title>USD: -1 (2026-05-31)</title></circle>
+<circle cx="513.3333333333333" cy="133.57142857142856" r="4" fill="#0f172a" stroke="#8b5cf6" class="series-dot" id="dot-USD-4"><title>USD: 4 (2026-06-07)</title></circle>
+<circle cx="626.6666666666667" cy="133.57142857142856" r="4" fill="#0f172a" stroke="#8b5cf6" class="series-dot" id="dot-USD-5"><title>USD: 4 (2026-06-21)</title></circle>
+<circle cx="740.0" cy="133.57142857142856" r="4" fill="#0f172a" stroke="#8b5cf6" class="series-dot" id="dot-USD-6"><title>USD: 4 (2026-06-28)</title></circle>
+<path d="M 60.0 245.0 L 173.33333333333331 161.42857142857144 L 286.66666666666663 217.14285714285717 L 400.0 272.8571428571429 L 513.3333333333333 300.7142857142857 L 626.6666666666667 300.7142857142857 L 740.0 272.8571428571429" class="line-series" stroke="#ec4899" id="series-CAD" />
+<circle cx="60.0" cy="245.0" r="4" fill="#0f172a" stroke="#ec4899" class="series-dot" id="dot-CAD-0"><title>CAD: 0 (2026-05-10)</title></circle>
+<circle cx="173.33333333333331" cy="161.42857142857144" r="4" fill="#0f172a" stroke="#ec4899" class="series-dot" id="dot-CAD-1"><title>CAD: 3 (2026-05-17)</title></circle>
+<circle cx="286.66666666666663" cy="217.14285714285717" r="4" fill="#0f172a" stroke="#ec4899" class="series-dot" id="dot-CAD-2"><title>CAD: 1 (2026-05-24)</title></circle>
+<circle cx="400.0" cy="272.8571428571429" r="4" fill="#0f172a" stroke="#ec4899" class="series-dot" id="dot-CAD-3"><title>CAD: -1 (2026-05-31)</title></circle>
+<circle cx="513.3333333333333" cy="300.7142857142857" r="4" fill="#0f172a" stroke="#ec4899" class="series-dot" id="dot-CAD-4"><title>CAD: -2 (2026-06-07)</title></circle>
+<circle cx="626.6666666666667" cy="300.7142857142857" r="4" fill="#0f172a" stroke="#ec4899" class="series-dot" id="dot-CAD-5"><title>CAD: -2 (2026-06-21)</title></circle>
+<circle cx="740.0" cy="272.8571428571429" r="4" fill="#0f172a" stroke="#ec4899" class="series-dot" id="dot-CAD-6"><title>CAD: -1 (2026-06-28)</title></circle>
+<path d="M 60.0 272.8571428571429 L 173.33333333333331 328.57142857142856 L 286.66666666666663 272.8571428571429 L 400.0 245.0 L 513.3333333333333 356.42857142857144 L 626.6666666666667 384.2857142857143 L 740.0 356.42857142857144" class="line-series" stroke="#06b6d4" id="series-CHF" />
+<circle cx="60.0" cy="272.8571428571429" r="4" fill="#0f172a" stroke="#06b6d4" class="series-dot" id="dot-CHF-0"><title>CHF: -1 (2026-05-10)</title></circle>
+<circle cx="173.33333333333331" cy="328.57142857142856" r="4" fill="#0f172a" stroke="#06b6d4" class="series-dot" id="dot-CHF-1"><title>CHF: -3 (2026-05-17)</title></circle>
+<circle cx="286.66666666666663" cy="272.8571428571429" r="4" fill="#0f172a" stroke="#06b6d4" class="series-dot" id="dot-CHF-2"><title>CHF: -1 (2026-05-24)</title></circle>
+<circle cx="400.0" cy="245.0" r="4" fill="#0f172a" stroke="#06b6d4" class="series-dot" id="dot-CHF-3"><title>CHF: 0 (2026-05-31)</title></circle>
+<circle cx="513.3333333333333" cy="356.42857142857144" r="4" fill="#0f172a" stroke="#06b6d4" class="series-dot" id="dot-CHF-4"><title>CHF: -4 (2026-06-07)</title></circle>
+<circle cx="626.6666666666667" cy="384.2857142857143" r="4" fill="#0f172a" stroke="#06b6d4" class="series-dot" id="dot-CHF-5"><title>CHF: -5 (2026-06-21)</title></circle>
+<circle cx="740.0" cy="356.42857142857144" r="4" fill="#0f172a" stroke="#06b6d4" class="series-dot" id="dot-CHF-6"><title>CHF: -4 (2026-06-28)</title></circle>
+<path d="M 60.0 272.8571428571429 L 173.33333333333331 272.8571428571429 L 286.66666666666663 272.8571428571429 L 400.0 328.57142857142856 L 513.3333333333333 328.57142857142856 L 626.6666666666667 161.42857142857144 L 740.0 133.57142857142856" class="line-series" stroke="#14b8a6" id="series-JPY" />
+<circle cx="60.0" cy="272.8571428571429" r="4" fill="#0f172a" stroke="#14b8a6" class="series-dot" id="dot-JPY-0"><title>JPY: -1 (2026-05-10)</title></circle>
+<circle cx="173.33333333333331" cy="272.8571428571429" r="4" fill="#0f172a" stroke="#14b8a6" class="series-dot" id="dot-JPY-1"><title>JPY: -1 (2026-05-17)</title></circle>
+<circle cx="286.66666666666663" cy="272.8571428571429" r="4" fill="#0f172a" stroke="#14b8a6" class="series-dot" id="dot-JPY-2"><title>JPY: -1 (2026-05-24)</title></circle>
+<circle cx="400.0" cy="328.57142857142856" r="4" fill="#0f172a" stroke="#14b8a6" class="series-dot" id="dot-JPY-3"><title>JPY: -3 (2026-05-31)</title></circle>
+<circle cx="513.3333333333333" cy="328.57142857142856" r="4" fill="#0f172a" stroke="#14b8a6" class="series-dot" id="dot-JPY-4"><title>JPY: -3 (2026-06-07)</title></circle>
+<circle cx="626.6666666666667" cy="161.42857142857144" r="4" fill="#0f172a" stroke="#14b8a6" class="series-dot" id="dot-JPY-5"><title>JPY: 3 (2026-06-21)</title></circle>
+<circle cx="740.0" cy="133.57142857142856" r="4" fill="#0f172a" stroke="#14b8a6" class="series-dot" id="dot-JPY-6"><title>JPY: 4 (2026-06-28)</title></circle>
+<circle cx="770" cy="66" r="6" fill="#3b82f6" />
+<g class="legend-item" onclick="var el=document.getElementById('series-EUR'); if(el.style.opacity=='0.1'){el.style.opacity='1';}else{el.style.opacity='0.1';}"><text x="785" y="70" class="legend-text">EUR (+1)</text></g>
+<circle cx="770" cy="96" r="6" fill="#ef4444" />
+<g class="legend-item" onclick="var el=document.getElementById('series-GBP'); if(el.style.opacity=='0.1'){el.style.opacity='1';}else{el.style.opacity='0.1';}"><text x="785" y="100" class="legend-text">GBP (+1)</text></g>
+<circle cx="770" cy="126" r="6" fill="#10b981" />
+<g class="legend-item" onclick="var el=document.getElementById('series-AUD'); if(el.style.opacity=='0.1'){el.style.opacity='1';}else{el.style.opacity='0.1';}"><text x="785" y="130" class="legend-text">AUD (-2)</text></g>
+<circle cx="770" cy="156" r="6" fill="#f59e0b" />
+<g class="legend-item" onclick="var el=document.getElementById('series-NZD'); if(el.style.opacity=='0.1'){el.style.opacity='1';}else{el.style.opacity='0.1';}"><text x="785" y="160" class="legend-text">NZD (-3)</text></g>
+<circle cx="770" cy="186" r="6" fill="#8b5cf6" />
+<g class="legend-item" onclick="var el=document.getElementById('series-USD'); if(el.style.opacity=='0.1'){el.style.opacity='1';}else{el.style.opacity='0.1';}"><text x="785" y="190" class="legend-text">USD (+4)</text></g>
+<circle cx="770" cy="216" r="6" fill="#ec4899" />
+<g class="legend-item" onclick="var el=document.getElementById('series-CAD'); if(el.style.opacity=='0.1'){el.style.opacity='1';}else{el.style.opacity='0.1';}"><text x="785" y="220" class="legend-text">CAD (-1)</text></g>
+<circle cx="770" cy="246" r="6" fill="#06b6d4" />
+<g class="legend-item" onclick="var el=document.getElementById('series-CHF'); if(el.style.opacity=='0.1'){el.style.opacity='1';}else{el.style.opacity='0.1';}"><text x="785" y="250" class="legend-text">CHF (-4)</text></g>
+<circle cx="770" cy="276" r="6" fill="#14b8a6" />
+<g class="legend-item" onclick="var el=document.getElementById('series-JPY'); if(el.style.opacity=='0.1'){el.style.opacity='1';}else{el.style.opacity='0.1';}"><text x="785" y="280" class="legend-text">JPY (+4)</text></g>
+</svg>
