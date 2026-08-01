@@ -1,0 +1,17 @@
+[
+  {
+    "symbol": "EIGHTCAP:USDCAD",
+    "bias": "bearish",
+    "price": 1.415
+  },
+  {
+    "symbol": "EIGHTCAP:EURGBP",
+    "bias": "bullish",
+    "price": 0.851
+  },
+  {
+    "symbol": "EIGHTCAP:GBPAUD",
+    "bias": "bullish",
+    "price": 1.926
+  }
+]

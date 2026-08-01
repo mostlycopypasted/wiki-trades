@@ -39,17 +39,21 @@ To run a Daily chart scan:
    - Run `bash ~/tradingview-mcp/scripts/launch_tv_debug_mac.sh` to ensure TradingView Desktop is running with Chrome DevTools Protocol enabled on port 9222.
    - For every symbol scanned, reset chart scale for Daily resolution (`chart_set_timeframe` = `1D`).
 
-2. **Execute Automated Daily Scanner & TAT Level Extraction**:
-   - Run `node ~/tradingview-mcp/scratch/run_daily_brief.mjs` via `run_command`.
-   - Query `data_get_pine_lines` and `data_get_study_values` via TradingView MCP to extract:
-     - **Wash Lines**: `Day Buy` (Daily Buy Wash Line), `Day Sell` (Daily Sell Wash Line), `Wk Buy` (Weekly Buy Wash Line), `Wk Sell` (Weekly Sell Wash Line).
-     - **TAT Levels**: `MajD/MinD <Price> FiRet m15/h1/h4/D/W/M`, `MajD/MinD <Price> Sup/Res m15/h1/h4/D/W`, and `TP : <Price>`.
-     - **TAT Alerts**: `OptBull`, `LBull`, `SBull` (Bullish) | `OptBear`, `LBear`, `SBear` (Bearish).
-   - The scanner extracts the watchlist from `rules.json`, sets timeframe to `D`, scans all symbols, compares results with yesterday's Daily brief, and computes the Daily Currency Strength Scoreboard.
+2. **Execute Master Daily Brief Generator**:
+   - Run `python3 scripts/generate_daily_brief.py` via `run_command`.
+   - This master script automatically:
+     1. Invokes the `currency-strength-tracker` skill (`pull_currency_strength.py`) to scrape live readings, generate historical CSV, and render `wiki/images/currency-strength-graph.svg`.
+     2. Runs Daily & 3-Timeframe TAT Alert Analysis (`binni_alert_analysis.py`).
+     3. Runs the D-R-H-R Short-Term Trading Scanner (`scan_drhr_setups.py`).
+     4. Captures live TradingView chart screenshots using `./scripts/capture_tv_chart.sh` for top setups and saves them to `wiki/images/`.
+     5. Assembles and writes the complete Daily Brief report to `wiki/reports/daily_brief/YYYY-MM-DD.md`.
 
-3. **Output Files**:
+
+3. **Output Files & Screenshot Storage**:
    - Markdown Report: `/Users/chriseah/obsidian/wiki-trades/wiki/reports/daily_brief/YYYY-MM-DD.md`
    - Structured JSON: `/Users/chriseah/obsidian/wiki-trades/wiki/reports/daily_brief/YYYY-MM-DD.json`
+   - Chart Screenshots: Captured via `./scripts/capture_tv_chart.sh` and stored directly in `/Users/chriseah/obsidian/wiki-trades/wiki/images/<symbol>_<timeframe>_chart.png` (embedded in Daily Brief reports using relative path `../../images/<symbol>_<timeframe>_chart.png`).
+
 
 ---
 
@@ -71,7 +75,11 @@ Once the Daily brief data is captured, evaluate candidate setups against the **R
 
 ## 📊 4. Report Delivery Structure
 
-When reporting results to the user:
+When generating the Daily Brief and reporting results to the user:
 1. **Summary of Daily Changes**: Highlight any structural shifts or new TAT signals since yesterday.
-2. **Currency Strength Scoreboard (Daily)**: Present the aggregated currency scores and top strong-vs-weak trade ideas.
+2. **Currency Strength Scoreboard & Trend Graph (Mandatory)**: 
+   - Execute `python3 .agents/skills/currency-strength-tracker/scripts/pull_currency_strength.py` to ensure the latest Currency Strength Meter readings and SVG trend graph are generated.
+   - Present the full **Currency Strength Table** (Scores, Trend Biases, and Suggested Pairs).
+   - Embed the **Currency Strength Trend Graph (SVG)** (`![Currency Strength Trend Graph](../../images/currency-strength-graph.svg)`).
 3. **Top Retest Trade Candidates**: Highlight symbols meeting the Daily Retest Execution filter rules with entry zones and risk-scale levels.
+

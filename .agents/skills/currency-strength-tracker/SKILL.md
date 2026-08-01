@@ -15,7 +15,9 @@ This skill tracks weekly currency strength from marketsmadeclear.com, maintains 
    - **Retry Logic**: If the script exits with status code `2` (meaning the web page data has not been updated yet), you MUST schedule a 1-hour one-shot timer (`DurationSeconds=3600`) to retry the pull. Continue doing this until the script succeeds (exits with code 0). 
 3. **Outputs**:
    - Historical CSV: `resources/currency_strength_history.csv`
-   - Trend Graph (SVG): `resources/currency_strength_graph.svg`
+   - Trend Graph (SVG): `wiki/images/currency-strength-graph.svg`
+   - Markdown Note: `wiki/notes/currency-strength.md`
+
 
 ## CLI Commands
 

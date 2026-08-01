@@ -100,6 +100,14 @@ When synthesizing the alert data, analyze according to Binni's core pillars:
 2. **1H Analysis Header Timestamp Rule**:
    - All 1H TAT analysis reports must include explicit SGT timestamps in the main title (e.g., `# 📈 1H TAT Analysis Report — YYYY-MM-DD [HH:MM SGT]`).
 3. **Same-Day 1H Iteration & Diff Protocol**:
-   - When executing an update run on a date that already has a report file (e.g., `wiki/reports/YYYY-MM-DD-1h-*-report.md`), do not overwrite existing content.
+   - When executing an update run on a date that already has a report file (e.g., `wiki/reports/tat_analysis/YYYY-MM-DD-1h-*-report.md`), do not overwrite existing content.
+
    - Append a new section: `## 🕒 Intraday Update Run — [HH:MM SGT]`.
    - Include an explicit **Differences & Changes Highlights** table comparing alert counts, sentiment shifts, signals, and structural changes since the previous run.
+4. **New Alert Screenshot Capture & Report Linking Protocol**:
+   - Whenever a TAT alert analysis detects **NEW alerts** for specific instruments during the scan run, the report MUST explicitly state which symbol fired a new signal (with signal name, direction, and timestamp).
+   - Execute `./scripts/tv_session.sh start` once, `./scripts/capture_tv_chart.sh <SYMBOL> <TIMEFRAME>` for each new alert symbol (which automatically generates timestamped filenames `YYMMDD-HHMMSS_<symbol>_<tf>_chart.png` for sorting), and `./scripts/tv_session.sh stop` once at the end.
+   - Embed the captured chart screenshots under a dedicated `## 📸 New Alert Chart Screenshots` section in the report (`![<Symbol> Chart Screenshot](../../images/YYMMDD-HHMMSS_<symbol>_<tf>_chart.png)`) and present them in the response.
+
+
+

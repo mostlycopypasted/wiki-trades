@@ -10,12 +10,17 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 resources_dir = os.path.abspath(os.path.join(script_dir, "..", "resources"))
 os.makedirs(resources_dir, exist_ok=True)
 
+images_dir = os.path.abspath(os.path.join(script_dir, "..", "..", "..", "..", "wiki", "images"))
+os.makedirs(images_dir, exist_ok=True)
 notes_dir = os.path.abspath(os.path.join(script_dir, "..", "..", "..", "..", "wiki", "notes"))
 os.makedirs(notes_dir, exist_ok=True)
 
 csv_path = os.path.join(resources_dir, "currency_strength_history.csv")
-svg_path = os.path.join(notes_dir, "currency-strength-graph.svg")
+svg_path = os.path.join(images_dir, "currency-strength-graph.svg")
 note_path = os.path.join(notes_dir, "currency-strength.md")
+
+
+import ssl
 
 # 1. Fetch live page
 url = "https://www.marketsmadeclear.com/Resources/Currency-Strength/Currency-Strength-Meter.aspx"
@@ -25,11 +30,13 @@ req = urllib.request.Request(
 )
 
 try:
-    with urllib.request.urlopen(req) as response:
+    context = ssl._create_unverified_context()
+    with urllib.request.urlopen(req, context=context) as response:
         html = response.read().decode('utf-8')
 except Exception as e:
     print(f"Error fetching url: {e}")
     sys.exit(1)
+
 
 # 2. Parse Date and Strengths
 week_match = re.search(r'Currency Strength Meter readings for week starting\s+([\d.]+)', html)
@@ -159,18 +166,18 @@ for idx, row in enumerate(csv_rows):
         date_exists_idx = idx
         break
 
-if date_exists_idx != -1:
-    print(f"Date {date_str} already exists in history. No new update on the webpage.")
-    sys.exit(2)
+if date_exists_idx == -1:
+    new_row = [date_str] + [str(data[c.upper()]) for c in currencies]
+    csv_rows.append(new_row)
+    csv_rows_sorted = [csv_rows[0]] + sorted(csv_rows[1:], key=lambda x: x[0])
+    with open(csv_path, "w", encoding="utf-8") as f:
+        for row in csv_rows_sorted:
+            f.write(",".join(row) + "\n")
+    print(f"Updated CSV history with date {date_str}.")
+else:
+    csv_rows_sorted = [csv_rows[0]] + sorted(csv_rows[1:], key=lambda x: x[0])
+    print(f"Date {date_str} exists in history. Regenerating SVG trend graph & note...")
 
-new_row = [date_str] + [str(data[c.upper()]) for c in currencies]
-csv_rows.append(new_row)
-
-csv_rows_sorted = [csv_rows[0]] + sorted(csv_rows[1:], key=lambda x: x[0])
-
-with open(csv_path, "w", encoding="utf-8") as f:
-    for row in csv_rows_sorted:
-        f.write(",".join(row) + "\n")
 
 print(f"Updated CSV history with date {date_str}.")
 
@@ -301,7 +308,8 @@ sources: 1
 
 Weekly currency strength meter readings and trend analysis compiled from marketsmadeclear.com.
 
-![Currency Strength Trend Graph](currency-strength-graph.svg)
+![Currency Strength Trend Graph](../images/currency-strength-graph.svg)
+
 
 ## Latest Readings (Week of {date_str})
 

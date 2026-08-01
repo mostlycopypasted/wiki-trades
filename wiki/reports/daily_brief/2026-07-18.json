@@ -1,0 +1,604 @@
+[
+  {
+    "symbol": "EIGHTCAP:EURAUD",
+    "structure": "Bullish",
+    "bias": "bearish",
+    "price": 1.63783,
+    "alert": "↓LBear"
+  },
+  {
+    "symbol": "EIGHTCAP:GBPAUD",
+    "structure": "Bullish",
+    "bias": "bullish",
+    "price": 1.92605,
+    "alert": "↓LBear"
+  },
+  {
+    "symbol": "EIGHTCAP:AUDNZD",
+    "structure": "Bearish",
+    "bias": "bearish",
+    "price": 1.19378,
+    "alert": "⬤OptBull"
+  },
+  {
+    "symbol": "EIGHTCAP:EURNZD",
+    "structure": "Expand",
+    "bias": "bullish",
+    "price": 1.9565,
+    "alert": "⬤OptBear"
+  },
+  {
+    "symbol": "EIGHTCAP:GBPNZD",
+    "structure": "Expand",
+    "bias": "bearish",
+    "price": 2.30086,
+    "alert": "⬤OptBear"
+  },
+  {
+    "symbol": "EIGHTCAP:EURGBP",
+    "structure": "Bullish",
+    "bias": "bearish",
+    "price": 0.84994,
+    "alert": "⬤OptBear"
+  },
+  {
+    "symbol": "EIGHTCAP:AUDCAD",
+    "structure": "Squeeze",
+    "bias": "bullish",
+    "price": 0.97846,
+    "alert": "⬤OptBear"
+  },
+  {
+    "symbol": "EIGHTCAP:NZDCAD",
+    "structure": "Bearish",
+    "bias": "bullish",
+    "price": 0.81826,
+    "alert": "⬤OptBull"
+  },
+  {
+    "symbol": "EIGHTCAP:GBPCAD",
+    "structure": "Expand",
+    "bias": "bullish",
+    "price": 1.88563,
+    "alert": "SBear"
+  },
+  {
+    "symbol": "EIGHTCAP:EURCAD",
+    "structure": "Squeeze",
+    "bias": "bullish",
+    "price": 1.60338,
+    "alert": "⬤OptBull"
+  },
+  {
+    "symbol": "EIGHTCAP:USDCAD",
+    "structure": "Bullish",
+    "bias": "bullish",
+    "price": 1.40193,
+    "alert": "SBear"
+  },
+  {
+    "symbol": "EIGHTCAP:AUDJPY",
+    "structure": "Bearish",
+    "bias": "bullish",
+    "price": 113.348,
+    "alert": "⬤OptBull"
+  },
+  {
+    "symbol": "EIGHTCAP:NZDJPY",
+    "structure": "Expand",
+    "bias": "bearish",
+    "price": 94.85,
+    "alert": "⬤OptBull"
+  },
+  {
+    "symbol": "EIGHTCAP:EURJPY",
+    "structure": "Bearish",
+    "bias": "bullish",
+    "price": 185.739,
+    "alert": "⬤OptBull"
+  },
+  {
+    "symbol": "EIGHTCAP:GBPJPY",
+    "structure": "Bearish",
+    "bias": "bullish",
+    "price": 218.415,
+    "alert": "SBear"
+  },
+  {
+    "symbol": "EIGHTCAP:USDJPY",
+    "structure": "Bullish",
+    "bias": "bullish",
+    "price": 162.38,
+    "alert": "⬤OptBull"
+  },
+  {
+    "symbol": "EIGHTCAP:CADJPY",
+    "structure": "Bearish",
+    "bias": "bearish",
+    "price": 115.808,
+    "alert": "⬤OptBear"
+  },
+  {
+    "symbol": "EIGHTCAP:CHFJPY",
+    "structure": "Bearish",
+    "bias": "bullish",
+    "price": 201.058,
+    "alert": "SBear"
+  },
+  {
+    "symbol": "EIGHTCAP:CADCHF",
+    "structure": "Squeeze",
+    "bias": "bearish",
+    "price": 0.57568,
+    "alert": "↓LBear"
+  },
+  {
+    "symbol": "EIGHTCAP:USDCHF",
+    "structure": "Bullish",
+    "bias": "bullish",
+    "price": 0.80717,
+    "alert": "⬤OptBull"
+  },
+  {
+    "symbol": "EIGHTCAP:AUDCHF",
+    "structure": "Expand",
+    "bias": "bullish",
+    "price": 0.56335,
+    "alert": "LBull"
+  },
+  {
+    "symbol": "EIGHTCAP:NZDCHF",
+    "structure": "Expand",
+    "bias": "bullish",
+    "price": 0.47101,
+    "alert": "⬤OptBull"
+  },
+  {
+    "symbol": "EIGHTCAP:EURCHF",
+    "structure": "Expand",
+    "bias": "bullish",
+    "price": 0.92325,
+    "alert": "↑SBull"
+  },
+  {
+    "symbol": "EIGHTCAP:GBPCHF",
+    "structure": "Bullish",
+    "bias": "bullish",
+    "price": 1.08551,
+    "alert": "⬤OptBull"
+  },
+  {
+    "symbol": "EIGHTCAP:EURUSD",
+    "structure": "Bearish",
+    "bias": "bearish",
+    "price": 1.14363,
+    "alert": "↓LBear"
+  },
+  {
+    "symbol": "EIGHTCAP:GBPUSD",
+    "structure": "Bearish",
+    "bias": "bullish",
+    "price": 1.34504,
+    "alert": "⬤OptBull"
+  },
+  {
+    "symbol": "EIGHTCAP:AUDUSD",
+    "structure": "Bearish",
+    "bias": "bearish",
+    "price": 0.69792,
+    "alert": "LBull"
+  },
+  {
+    "symbol": "EIGHTCAP:NZDUSD",
+    "structure": "Expand",
+    "bias": "bullish",
+    "price": 0.58396,
+    "alert": "LBull"
+  },
+  {
+    "symbol": "EIGHTCAP:XAUUSD",
+    "structure": "Bearish",
+    "bias": "bearish",
+    "price": 4017.2,
+    "alert": "↑SBull"
+  },
+  {
+    "symbol": "EIGHTCAP:XAGUSD",
+    "structure": "Bearish",
+    "bias": "bullish",
+    "price": 55.903,
+    "alert": "↓LBear"
+  },
+  {
+    "symbol": "EIGHTCAP:USOUSD",
+    "structure": "Bearish",
+    "bias": "bullish",
+    "price": 82.538,
+    "alert": "↓LBear"
+  },
+  {
+    "symbol": "EIGHTCAP:AUDSGD",
+    "structure": "Bearish",
+    "bias": "bullish",
+    "price": 0.90061,
+    "alert": "LBull"
+  },
+  {
+    "symbol": "EIGHTCAP:NZDSGD",
+    "structure": "Expand",
+    "bias": "bullish",
+    "price": 0.75348,
+    "alert": "⬤OptBear"
+  },
+  {
+    "symbol": "EIGHTCAP:EURSGD",
+    "structure": "Bearish",
+    "bias": "bearish",
+    "price": 1.47585,
+    "alert": "⬤OptBull"
+  },
+  {
+    "symbol": "EIGHTCAP:GBPSGD",
+    "structure": "Bearish",
+    "bias": "bullish",
+    "price": 1.73538,
+    "alert": "LBull"
+  },
+  {
+    "symbol": "EIGHTCAP:USDSGD",
+    "structure": "Bullish",
+    "bias": "bearish",
+    "price": 1.29101,
+    "alert": "⬤OptBear"
+  },
+  {
+    "symbol": "EIGHTCAP:USDCNH",
+    "structure": "Expand",
+    "bias": "bearish",
+    "price": 6.77764,
+    "alert": "⬤OptBear"
+  },
+  {
+    "symbol": "FX_IDC:JPYCNH",
+    "structure": "Bearish",
+    "bias": "bearish",
+    "price": 0.041687,
+    "alert": "⬤OptBear"
+  },
+  {
+    "symbol": "EIGHTCAP:AUDCNH",
+    "structure": "Expand",
+    "bias": "bullish",
+    "price": 4.73115,
+    "alert": "⬤OptBear"
+  },
+  {
+    "symbol": "TVC:DXY",
+    "structure": "Bullish",
+    "bias": "bullish",
+    "price": 100.754,
+    "alert": "SBear"
+  },
+  {
+    "symbol": "EIGHTCAP:ASX200",
+    "structure": "Bullish",
+    "bias": "bearish",
+    "price": 8845.78,
+    "alert": "⬤OptBull"
+  },
+  {
+    "symbol": "FOREXCOM:EU50",
+    "structure": "Bullish",
+    "bias": "bullish",
+    "price": 6230,
+    "alert": "SBear"
+  },
+  {
+    "symbol": "EIGHTCAP:JPN225",
+    "structure": "Bullish",
+    "bias": "bullish",
+    "price": 64903.99,
+    "alert": "↓LBear"
+  },
+  {
+    "symbol": "PEPPERSTONE:GER40",
+    "structure": "Bullish",
+    "bias": "bullish",
+    "price": 24842.1,
+    "alert": "⬤OptBull"
+  },
+  {
+    "symbol": "SKILLING:NATGAS",
+    "structure": "Bullish",
+    "bias": "bearish",
+    "price": 2.88,
+    "alert": "↓LBear"
+  },
+  {
+    "symbol": "NYMEX:NG1!",
+    "structure": "Squeeze",
+    "bias": "bearish",
+    "price": 2.911,
+    "alert": "LBull"
+  },
+  {
+    "symbol": "EIGHTCAP:NDQ100",
+    "structure": "Squeeze",
+    "bias": "bearish",
+    "price": 28573.66,
+    "alert": "⬤OptBull"
+  },
+  {
+    "symbol": "EIGHTCAP:SPX500",
+    "structure": "Squeeze",
+    "bias": "bearish",
+    "price": 7453.95,
+    "alert": "⬤OptBull"
+  },
+  {
+    "symbol": "AMEX:SPY",
+    "structure": "Bearish",
+    "bias": "bearish",
+    "price": 743.29,
+    "alert": "⬤OptBull"
+  },
+  {
+    "symbol": "EIGHTCAP:US2000",
+    "structure": "Bullish",
+    "bias": "bullish",
+    "price": 2956.78,
+    "alert": "SBear"
+  },
+  {
+    "symbol": "EIGHTCAP:US30",
+    "structure": "Bullish",
+    "bias": "bullish",
+    "price": 52165.69,
+    "alert": "SBear"
+  },
+  {
+    "symbol": "HSI:HSI",
+    "structure": "Bearish",
+    "bias": "bearish",
+    "price": 24562.24,
+    "alert": "LBull"
+  },
+  {
+    "symbol": "EIGHTCAP:HK50",
+    "structure": "Bearish",
+    "bias": "bearish",
+    "price": 24579.43,
+    "alert": "LBull"
+  },
+  {
+    "symbol": "HSI:HSTECH",
+    "structure": "Bearish",
+    "bias": "bearish",
+    "price": 4623.17,
+    "alert": "↑SBull"
+  },
+  {
+    "symbol": "EIGHTCAP:CN50",
+    "structure": "Bearish",
+    "bias": "bullish",
+    "price": 14523.12,
+    "alert": "⬤OptBear"
+  },
+  {
+    "symbol": "SGX:SCY",
+    "structure": "Bullish",
+    "bias": "neutral",
+    "price": 1.631,
+    "alert": "↓LBear"
+  },
+  {
+    "symbol": "SGX:DHLU",
+    "structure": "Bearish",
+    "bias": "bearish",
+    "price": 0.485,
+    "alert": "↑SBull"
+  },
+  {
+    "symbol": "SGX:M44U",
+    "structure": "Squeeze",
+    "bias": "bearish",
+    "price": 1.21,
+    "alert": "⬤OptBull"
+  },
+  {
+    "symbol": "SGX:ME8U",
+    "structure": "Bearish",
+    "bias": "bearish",
+    "price": 1.94,
+    "alert": "⬤OptBear"
+  },
+  {
+    "symbol": "SGX:558",
+    "structure": "Squeeze",
+    "bias": "bullish",
+    "price": 2.44,
+    "alert": "↓LBear"
+  },
+  {
+    "symbol": "SGX:N01",
+    "structure": "Bearish",
+    "bias": "bullish",
+    "price": 0.183,
+    "alert": "⬤OptBull"
+  },
+  {
+    "symbol": "SGX:LJ3",
+    "structure": "Bearish",
+    "bias": "bearish",
+    "price": 1.01,
+    "alert": "LBull"
+  },
+  {
+    "symbol": "SGX:D05",
+    "structure": "Bullish",
+    "bias": "bullish",
+    "price": 71.96,
+    "alert": "SBear"
+  },
+  {
+    "symbol": "SGX:O39",
+    "structure": "Bullish",
+    "bias": "bullish",
+    "price": 28.56,
+    "alert": "⬤OptBear"
+  },
+  {
+    "symbol": "SGX:U11",
+    "structure": "Bullish",
+    "bias": "bullish",
+    "price": 42.47,
+    "alert": "LBull"
+  },
+  {
+    "symbol": "SGX:BS6",
+    "structure": "Squeeze",
+    "bias": "bullish",
+    "price": 3.63,
+    "alert": "⬤OptBear"
+  },
+  {
+    "symbol": "NASDAQ:TSLA",
+    "structure": "Bearish",
+    "bias": "bullish",
+    "price": 380.84,
+    "alert": "LBull"
+  },
+  {
+    "symbol": "NASDAQ:NVDA",
+    "structure": "Bearish",
+    "bias": "bearish",
+    "price": 202.81,
+    "alert": "↑SBull"
+  },
+  {
+    "symbol": "NASDAQ:MSFT",
+    "structure": "Squeeze",
+    "bias": "bearish",
+    "price": 393.82,
+    "alert": "⬤OptBear"
+  },
+  {
+    "symbol": "NASDAQ:META",
+    "structure": "Bearish",
+    "bias": "bullish",
+    "price": 646.01,
+    "alert": "↑SBull"
+  },
+  {
+    "symbol": "NASDAQ:AAPL",
+    "structure": "Bearish",
+    "bias": "bullish",
+    "price": 333.74,
+    "alert": "LBull"
+  },
+  {
+    "symbol": "NASDAQ:AMZN",
+    "structure": "Bearish",
+    "bias": "bullish",
+    "price": 247.23,
+    "alert": "LBull"
+  },
+  {
+    "symbol": "NASDAQ:GOOGL",
+    "structure": "Squeeze",
+    "bias": "bullish",
+    "price": 346.77,
+    "alert": "⬤OptBear"
+  },
+  {
+    "symbol": "NASDAQ:GOOG",
+    "structure": "Squeeze",
+    "bias": "bullish",
+    "price": 346.12,
+    "alert": "⬤OptBear"
+  },
+  {
+    "symbol": "NASDAQ:CLSK",
+    "structure": "Bearish",
+    "bias": "bearish",
+    "price": 13.03,
+    "alert": "↓LBear"
+  },
+  {
+    "symbol": "NASDAQ:MSTR",
+    "structure": "Bearish",
+    "bias": "bearish",
+    "price": 94.85,
+    "alert": "↓LBear"
+  },
+  {
+    "symbol": "NASDAQ:RIOT",
+    "structure": "Bullish",
+    "bias": "bearish",
+    "price": 18.26,
+    "alert": "↓LBear"
+  },
+  {
+    "symbol": "NEO:PLSR",
+    "structure": "Bearish",
+    "bias": "bearish",
+    "price": 1.44,
+    "alert": "SBear"
+  },
+  {
+    "symbol": "EIGHTCAP:NVDA",
+    "structure": "Bearish",
+    "bias": "bearish",
+    "price": 203.48,
+    "alert": "↑SBull"
+  },
+  {
+    "symbol": "NASDAQ:IBIT",
+    "structure": "Bearish",
+    "bias": "bearish",
+    "price": 36.35,
+    "alert": "SBear"
+  },
+  {
+    "symbol": "CME:6J1!",
+    "structure": "Bearish",
+    "bias": "bearish",
+    "price": 0.006183,
+    "alert": "⬤OptBear"
+  },
+  {
+    "symbol": "NASDAQ:QQQ",
+    "structure": "Bearish",
+    "bias": "bearish",
+    "price": 695.33,
+    "alert": "⬤OptBull"
+  },
+  {
+    "symbol": "AMEX:IWM",
+    "structure": "Bullish",
+    "bias": "bullish",
+    "price": 294.04,
+    "alert": "SBear"
+  },
+  {
+    "symbol": "AMEX:GLD",
+    "structure": "Bearish",
+    "bias": "bearish",
+    "price": 368.41,
+    "alert": "↓LBear"
+  },
+  {
+    "symbol": "AMEX:SLV",
+    "structure": "Bearish",
+    "bias": "bullish",
+    "price": 50.78,
+    "alert": "↓LBear"
+  },
+  {
+    "symbol": "NASDAQ:SMH",
+    "structure": "Bullish",
+    "bias": "bullish",
+    "price": 556.53,
+    "alert": "↓LBear"
+  }
+]
