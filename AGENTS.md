@@ -59,6 +59,11 @@ Default layout. Adjust as the wiki grows.
     - **Bullish**: `OptBull` (Optimal Bull), `LBull` (Large Bull), `SBull` (Small Bull).
     - **Bearish**: `OptBear` (Optimal Bear), `LBear` (Large Bear), `SBear` (Small Bear).
   - *"1+1 Confirmation"* = Confluence of price closing across a horizontal level AND crossing the 20/21 EMA.
+  - *Weekly Signal Close Times* = The Weekly TAT signal for a symbol is generated/finalized at that symbol's **last trading session close of the week**, not a uniform calendar boundary:
+    - **Forex & US Stocks**: Saturday 05:00 SGT (= Friday NY close).
+    - **Singapore & Hong Kong Stocks**: Friday 17:00 SGT (SGX/HKEX local close).
+    - **Crypto**: Monday 09:00 SGT (weekly bar rollover, since crypto trades 24/7 with no natural "last session").
+    - When labeling a Weekly TAT signal by week number (e.g. in `wiki/reports/weekly_brief/`), attribute it to the week whose close (per the asset-class times above) actually produced that signal.
 - **Wiki links:** standard markdown, relative paths. `[Title](../entities/title.md)`.
 - **Citation style:** in-line as `(see [Source Title](../sources/source-slug.md))`.
 
