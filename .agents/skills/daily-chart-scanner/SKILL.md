@@ -42,10 +42,10 @@ To run a Daily chart scan:
 2. **Execute Master Daily Brief Generator**:
    - Run `python3 scripts/generate_daily_brief.py` via `run_command`.
    - This master script automatically:
-     1. Invokes the `currency-strength-tracker` skill (`pull_currency_strength.py`) to scrape live readings, generate historical CSV, and render `wiki/images/currency-strength-graph.svg`.
+     1. Runs a live `tv brief` scan of the watchlist, converts it via `scripts/build_daily_bias.py` into `~/tradingview-mcp/daily_brief/{date}.json`, then runs `scripts/tat_currency_strength.py` to derive Currency Strength from ZigZag Daily-chart structure and render `wiki/notes/currency-strength.md` + `wiki/images/currency-strength-graph.svg` (replaces the retired `currency-strength-tracker` marketsmadeclear scrape).
      2. Runs Daily & 3-Timeframe TAT Alert Analysis (`binni_alert_analysis.py`).
      3. Runs the D-R-H-R Short-Term Trading Scanner (`scan_drhr_setups.py`).
-     4. Captures live TradingView chart screenshots using `./scripts/capture_tv_chart.sh` for top setups and saves them to `wiki/images/`.
+     4. Captures a live TradingView chart screenshot using `./scripts/capture_tv_chart.sh` for the top D-R-H-R setup (if any) and saves it to `wiki/images/`.
      5. Assembles and writes the complete Daily Brief report to `wiki/reports/daily_brief/YYYY-MM-DD.md`.
 
 
@@ -78,7 +78,7 @@ Once the Daily brief data is captured, evaluate candidate setups against the **R
 When generating the Daily Brief and reporting results to the user:
 1. **Summary of Daily Changes**: Highlight any structural shifts or new TAT signals since yesterday.
 2. **Currency Strength Scoreboard & Trend Graph (Mandatory)**: 
-   - Execute `python3 .agents/skills/currency-strength-tracker/scripts/pull_currency_strength.py` to ensure the latest Currency Strength Meter readings and SVG trend graph are generated.
+   - Execute `python3 scripts/tat_currency_strength.py` (requires `~/tradingview-mcp/daily_brief/{today}.json` to exist — run a live `tv brief` scan + `scripts/build_daily_bias.py` first if it doesn't) to ensure the latest ZigZag-structure-derived Currency Strength readings and SVG trend graph are generated.
    - Present the full **Currency Strength Table** (Scores, Trend Biases, and Suggested Pairs).
    - Embed the **Currency Strength Trend Graph (SVG)** (`![Currency Strength Trend Graph](../../images/currency-strength-graph.svg)`).
 3. **Top Retest Trade Candidates**: Highlight symbols meeting the Daily Retest Execution filter rules with entry zones and risk-scale levels.

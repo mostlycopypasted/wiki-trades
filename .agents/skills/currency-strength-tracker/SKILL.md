@@ -1,27 +1,40 @@
 ---
 name: currency-strength-tracker
-description: Pulls weekly currency strength meter readings and plots historical trends.
+description: RETIRED (2026-08-02). Formerly pulled weekly currency strength meter readings from marketsmadeclear.com; superseded by scripts/tat_currency_strength.py.
 ---
 
-# Currency Strength Tracker
+# Currency Strength Tracker (Retired)
 
-This skill tracks weekly currency strength from marketsmadeclear.com, maintains a CSV history, and plots currency trends using dependency-free SVG graphs.
+**Retired 2026-08-02.** This skill scraped a weekly, external Currency Strength Meter
+from marketsmadeclear.com — a third-party score with no connection to the wiki's own
+TradingView data. It was replaced because the reading was often stale (the site only
+refreshes weekly) and opaque (no visibility into their methodology).
 
-## Setup & Execution
+**Current replacement**: `scripts/tat_currency_strength.py`, which derives currency
+strength from live TradingView Daily-chart **ZigZag market structure** per instrument
+(upward structure / downward structure / change of structure), aggregated per currency
+across the 8 majors. It reads `~/tradingview-mcp/daily_brief/*.json` (populated by
+`scripts/build_daily_bias.py` from a live `tv brief` scan) and writes the same output
+files this skill used to (`wiki/notes/currency-strength.md`,
+`wiki/images/currency-strength-graph.svg`), so downstream consumers
+(`scripts/generate_daily_brief.py`) needed no changes to their read side. It also
+writes a deeper per-run report to `wiki/reports/{date}-tat-currency-strength-report.md`.
+`scripts/generate_daily_brief.py` now runs this whole pipeline itself as its first step
+— no separate skill invocation is needed.
 
-1. **Execution**: The scraper script is designed to run automatically.
-2. **Cron Schedule**: A cron schedule runs the script every Sunday at 5:00 PM (17:00).
-   - Cron Expression: `0 17 * * 0` (or `0 9 * * 0` in UTC).
-   - **Retry Logic**: If the script exits with status code `2` (meaning the web page data has not been updated yet), you MUST schedule a 1-hour one-shot timer (`DurationSeconds=3600`) to retry the pull. Continue doing this until the script succeeds (exits with code 0). 
-3. **Outputs**:
-   - Historical CSV: `resources/currency_strength_history.csv`
-   - Trend Graph (SVG): `wiki/images/currency-strength-graph.svg`
-   - Markdown Note: `wiki/notes/currency-strength.md`
+No cron job was ever scheduled for this skill (confirmed via `CronList` at retirement
+time), so there was nothing live to disable.
 
+## What's left here (inert reference only)
 
-## CLI Commands
+- `scripts/pull_currency_strength.py` — the old scraper. Left in place, untouched, as a
+  historical reference. Do not run it as part of the live daily-brief pipeline.
+- `resources/currency_strength_history.csv` — the old weekly scrape history. Not merged
+  into the new structure-based history (different methodology and scale — not
+  comparable). The new pipeline's history lives entirely in
+  `~/tradingview-mcp/daily_brief/*.json`, one file per day.
 
-To manually trigger a pull:
+To manually run the old scraper for reference/comparison only:
 ```bash
 python3 .agents/skills/currency-strength-tracker/scripts/pull_currency_strength.py
 ```
