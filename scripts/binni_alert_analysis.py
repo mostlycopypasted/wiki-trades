@@ -60,7 +60,16 @@ def get_latest_full_date(records):
             return d
     return dates[0] if dates else None
 
-def analyze_alerts_binni_method(target_date=None, timeframe="H1"):
+def get_sgt_now():
+    """Return current time in SGT as 'HH:MM SGT'."""
+    import zoneinfo
+    now = datetime.datetime.now(zoneinfo.ZoneInfo("Asia/Singapore"))
+    return now.strftime("%H:%M SGT")
+
+
+def analyze_alerts_binni_method(target_date=None, timeframe="H1", run_time=None):
+    if run_time is None:
+        run_time = get_sgt_now()
     tf = timeframe.upper()
     
     if tf in ["MULTI", "3TF", "FULL"]:
@@ -68,7 +77,24 @@ def analyze_alerts_binni_method(target_date=None, timeframe="H1"):
         h4_records = fetch_sheet_records("4H")
         h1_records = fetch_sheet_records("H1")
         return analyze_3tf_multi_timeframe(daily_records, h4_records, h1_records, target_date)
-        
+
+    if tf in ["H1_4H", "MERGE"]:
+        # 1H must fully resolve (fetch + narrative) before 4H starts — not concurrent.
+        h1_records = fetch_sheet_records("H1")
+        merge_date = normalize_date(target_date) if target_date else get_latest_full_date(h1_records)
+        merge_run_time = run_time
+        h1_narrative = analyze_alerts_binni_method(merge_date, "H1", merge_run_time)
+
+        h4_records = fetch_sheet_records("4H")
+        h4_narrative = analyze_alerts_binni_method(merge_date, "4H", merge_run_time)
+
+        confluence = analyze_3tf_multi_timeframe([], h4_records, h1_records, merge_date, merge_run_time)
+
+        header = f"# Combined 1H + 4H TAT Review — {merge_date} [{merge_run_time}]\n"
+        combined = "\n\n---\n\n".join([header, h1_narrative, h4_narrative, confluence])
+        print(combined)
+        return combined
+
     records = fetch_sheet_records(tf)
     if not records:
         print(f"❌ No records fetched for {tf}.")
@@ -127,7 +153,19 @@ def analyze_alerts_binni_method(target_date=None, timeframe="H1"):
     indices_equity = {k: v for k, v in sym_alerts.items() if any(i in k for i in ['SPX', 'NDQ', 'US30', 'UK100', 'JPN225', 'CN50', 'HSI', 'HK50', 'EU50', 'GER40', 'FRA40', 'US2000', 'ASX200', 'SCY', 'SCN50', 'AAPL', 'NVDA', 'TSLA', 'MSFT', 'META', 'AMZN', 'GOOGL'])}
 
     report = []
-    report.append(f"# Binni's Market Analysis ({tf} Timeframe) — {target_date}\n")
+    report.append(f"# Binni's Market Analysis ({tf} Timeframe) — {target_date} [{run_time}]\n")
+
+    def format_sym_dir(sym, a_list):
+        if not a_list:
+            return f"[[{sym}]]"
+        last_a = a_list[-1]
+        d = last_a.get('Direction') or get_direction_from_signal(last_a.get('Signal') or last_a.get('Signal Type'), last_a.get('Details') or last_a.get('Event'))
+        if d == 'Bullish':
+            return f"[[{sym}]] (🟢 Bull)"
+        elif d == 'Bearish':
+            return f"[[{sym}]] (🔴 Bear)"
+        else:
+            return f"[[{sym}]] (⚪ Neut)"
 
     # Indices & Equities Detailed Narrative
     if indices_equity:
@@ -135,7 +173,8 @@ def analyze_alerts_binni_method(target_date=None, timeframe="H1"):
         i_bearish = idx_dirs.count('Bearish')
         i_bullish = idx_dirs.count('Bullish')
         dominant_idx = "bearish" if i_bearish > i_bullish else "bullish" if i_bullish > i_bearish else "mixed"
-        report.append(f"* **Indices & Equity Sector**: ({', '.join(indices_equity.keys())}) leans **{dominant_idx}** ({i_bullish} Bullish vs {i_bearish} Bearish out of {len(idx_dirs)} total). Track index breakout signals for equity momentum.\n")
+        formatted_idx = [format_sym_dir(k, v) for k, v in indices_equity.items()]
+        report.append(f"* **Indices & Equity Sector**: ({', '.join(formatted_idx)}) leans **{dominant_idx}** ({i_bullish} Bullish vs {i_bearish} Bearish out of {len(idx_dirs)} total). Track index breakout signals for equity momentum.\n")
     report.append(f"Today's **{tf}** session leans **{overall_sentiment}** overall ({bearish_count} Bearish vs {bullish_count} Bullish alerts out of {total_count} total), but the story changes depending on the asset cluster:\n")
     
     # Metals Narrative
@@ -154,8 +193,9 @@ def analyze_alerts_binni_method(target_date=None, timeframe="H1"):
         
         dominant_metal = "bearish" if m_bearish >= m_bullish else "bullish"
         time_note = f", several at identical timestamps ({', '.join(identical_times)})" if identical_times else ""
+        formatted_metals = [format_sym_dir(k, v) for k, v in metals.items()]
         
-        report.append(f"* **Gold & Silver (Metals Theme)**: Clearest theme — almost every metal pair ({', '.join(metals.keys())}) fired **{dominant_metal}**{time_note}. That's a strong, repeated signal rather than noise.\n")
+        report.append(f"* **Gold & Silver (Metals Theme)**: Clearest theme — almost every metal pair ({', '.join(formatted_metals)}) fired **{dominant_metal}**{time_note}. That's a strong, repeated signal rather than noise.\n")
 
     # Crude Oil / Energy Narrative
     if oil_pairs:
@@ -163,7 +203,8 @@ def analyze_alerts_binni_method(target_date=None, timeframe="H1"):
         o_bearish = o_dirs.count('Bearish')
         o_bullish = o_dirs.count('Bullish')
         dominant_oil = "bearish" if o_bearish >= o_bullish else "bullish"
-        report.append(f"* **Crude Oil / Energy Theme**: ({', '.join(oil_pairs.keys())}) fired **{dominant_oil}** ({o_bullish} Bullish vs {o_bearish} Bearish). Energy sector sentiment reflects key commodity level reaction.\n")
+        formatted_oil = [format_sym_dir(k, v) for k, v in oil_pairs.items()]
+        report.append(f"* **Crude Oil / Energy Theme**: ({', '.join(formatted_oil)}) fired **{dominant_oil}** ({o_bullish} Bullish vs {o_bearish} Bearish). Energy sector sentiment reflects key commodity level reaction.\n")
 
     # Cryptocurrency Narrative
     if crypto_pairs:
@@ -171,7 +212,8 @@ def analyze_alerts_binni_method(target_date=None, timeframe="H1"):
         c_bearish = c_dirs.count('Bearish')
         c_bullish = c_dirs.count('Bullish')
         dominant_crypto = "bearish" if c_bearish >= c_bullish else "bullish"
-        report.append(f"* **Cryptocurrency Cluster**: ({', '.join(crypto_pairs.keys())}) leans **{dominant_crypto}** ({c_bullish} Bullish vs {c_bearish} Bearish). Track Bitcoin directional leadership and ETF proxy flows.\n")
+        formatted_crypto = [format_sym_dir(k, v) for k, v in crypto_pairs.items()]
+        report.append(f"* **Cryptocurrency Cluster**: ({', '.join(formatted_crypto)}) leans **{dominant_crypto}** ({c_bullish} Bullish vs {c_bearish} Bearish). Track Bitcoin directional leadership and ETF proxy flows.\n")
 
     # DXY Dollar Index Cluster
     dxy_alerts = {k: v for k, v in sym_alerts.items() if any(d in k for d in ['DXY', 'USDX', 'DXYUSD'])}
@@ -191,14 +233,15 @@ def analyze_alerts_binni_method(target_date=None, timeframe="H1"):
         br_cnt = aud_dirs.count('Bearish')
         aud_story = "strongest bullish story" if b_cnt > br_cnt else "standout weakness story"
         
-        pairs_str = ", ".join(aud_pairs.keys())
-        report.append(f"* **AUD Crosses**: Mirror image — ({pairs_str}) came in aligning toward AUD sentiment, making AUD the **{aud_story}** of the day.\n")
+        formatted_aud = [format_sym_dir(k, v) for k, v in aud_pairs.items()]
+        report.append(f"* **AUD Crosses**: Mirror image — ({', '.join(formatted_aud)}) came in aligning toward AUD sentiment, making AUD the **{aud_story}** of the day.\n")
 
     # DXY & USD Narrative
     if dxy_alerts:
         d_dirs = [a.get('Direction') for v in dxy_alerts.values() for a in v]
         d_dominant = "bearish" if d_dirs.count('Bearish') >= d_dirs.count('Bullish') else "bullish"
-        report.append(f"* **DXY (US Dollar Index) Macro Direction**: DXY alerts ({', '.join(dxy_alerts.keys())}) fired **{d_dominant}**. Track weekly/daily Wash & Rinse lines and gap-fill support/resistance boundaries.\n")
+        formatted_dxy = [format_sym_dir(k, v) for k, v in dxy_alerts.items()]
+        report.append(f"* **DXY (US Dollar Index) Macro Direction**: DXY alerts ({', '.join(formatted_dxy)}) fired **{d_dominant}**. Track weekly/daily Wash & Rinse lines and gap-fill support/resistance boundaries.\n")
     else:
         report.append(f"* **DXY (US Dollar Index) Macro Direction**: DXY holding macro consolidation boundaries (~101.5 / weekly wash level); cross-referencing major USD pairs for macro alignment.\n")
 
@@ -207,7 +250,8 @@ def analyze_alerts_binni_method(target_date=None, timeframe="H1"):
         u_dirs = [a.get('Direction') for v in usd_pairs.values() for a in v]
         is_inconsistent = u_dirs.count('Bullish') > 0 and u_dirs.count('Bearish') > 0
         inc_note = "inconsistent — " if is_inconsistent else "aligned — "
-        report.append(f"* **USD Pairs (Inconsistency Check)**: {inc_note}USDX, USDCAD, and USDSGD vs USDJPY/USDCNH. Treat these with caution until confirming the labeling convention and time of alert.\n")
+        formatted_usd = [format_sym_dir(k, v) for k, v in usd_pairs.items()]
+        report.append(f"* **USD Pairs (Inconsistency Check)**: {inc_note}USDX, USDCAD, and USDSGD vs USDJPY/USDCNH ({', '.join(formatted_usd)}). Treat these with caution until confirming the labeling convention and time of alert.\n")
 
     # EUR Narrative
     if eur_pairs:
@@ -219,19 +263,24 @@ def analyze_alerts_binni_method(target_date=None, timeframe="H1"):
                     e_flips.append(sym)
                     
         flip_note = f" (with {', '.join(e_flips)} flipping direction within the same day)" if e_flips else ""
-        report.append(f"* **EUR Pairs**: Split / transitioning — bullish on earlier setups, but turning bearish on late-day breakouts{flip_note}.\n")
+        formatted_eur = [format_sym_dir(k, v) for k, v in eur_pairs.items()]
+        report.append(f"* **EUR Pairs**: Split / transitioning — ({', '.join(formatted_eur)}){flip_note}.\n")
 
     # Indices & Equities
     if indices_equity:
-        report.append(f"* **Indices & Equity Sector** ({', '.join(list(indices_equity.keys())[:6])}): Mixed bag with no dominant direction, reflecting selective intraday pullbacks.\n")
+        formatted_idx_brief = [format_sym_dir(k, v) for k, v in list(indices_equity.items())[:6]]
+        report.append(f"* **Indices & Equity Sector** ({', '.join(formatted_idx_brief)}): Mixed bag with no dominant direction, reflecting selective intraday pullbacks.\n")
     
     final_output = "\n".join(report)
     print(final_output)
     return final_output
 
-def analyze_3tf_multi_timeframe(daily_records, h4_records, h1_records, target_date=None):
+def analyze_3tf_multi_timeframe(daily_records, h4_records, h1_records, target_date=None, run_time=None):
+    if run_time is None:
+        run_time = get_sgt_now()
     if not h1_records:
         return "❌ Missing H1 records for multi-timeframe synthesis."
+    has_daily = bool(daily_records)
         
     if not target_date:
         target_date = get_latest_full_date(h1_records)
@@ -271,8 +320,11 @@ def analyze_3tf_multi_timeframe(daily_records, h4_records, h1_records, target_da
             h1_map[sym] = (d, r.get('Signal Type'), r.get('Time'))
 
     report = []
-    report.append(f"# Integrated Multi-Timeframe Analysis (Daily + 4H + 1H) — {target_date}\n")
-    
+    if has_daily:
+        report.append(f"# Integrated Multi-Timeframe Analysis (Daily + 4H + 1H) — {target_date} [{run_time}]\n")
+    else:
+        report.append(f"# 4H + 1H Confluence & Retest Review — {target_date} [{run_time}]\n")
+
     confluence_3tf = []
     confluence_4h_h1 = []
     alignment_2tf = []
@@ -320,31 +372,37 @@ def analyze_3tf_multi_timeframe(daily_records, h4_records, h1_records, target_da
                 'h1_sig': h1_sig
             })
             
-    report.append(f"### ⭐ 1. Highest-Confluence 3-Timeframe Setups (Daily + 4H + 1H)")
-    if confluence_3tf:
-        for item in confluence_3tf:
-            emoji = "🟢" if item['dir'] == "Bullish" else "🔴"
-            report.append(f"- {emoji} **[[{item['symbol']}]]** ({item['dir']}): Daily, 4H, and 1H all align **{item['dir']}**! H1 Signal: `{item['h1_sig']}` at {item['h1_time']}. Price: `{item['price']}`.")
-    else:
-        report.append("- No 3-timeframe setups active today.")
+    if has_daily:
+        report.append(f"### ⭐ 1. Highest-Confluence 3-Timeframe Setups (Daily + 4H + 1H)")
+        if confluence_3tf:
+            for item in confluence_3tf:
+                emoji = "🟢" if item['dir'] == "Bullish" else "🔴"
+                report.append(f"- {emoji} **[[{item['symbol']}]]** ({item['dir']}): Daily, 4H, and 1H all align **{item['dir']}**! H1 Signal: `{item['h1_sig']}` at {item['h1_time']}. Price: `{item['price']}`.")
+        else:
+            report.append("- No 3-timeframe setups active today.")
+        report.append("")
 
-    report.append(f"\n### 🔥 2. Highest Probability 4H + 1H Dual Signals (4H & 1H Same Direction)")
+    dual_num = "2" if has_daily else "1"
+    retest_num = "4" if has_daily else "2"
+
+    report.append(f"### 🔥 {dual_num}. Highest Probability 4H + 1H Dual Signals (4H & 1H Same Direction)")
     if confluence_4h_h1:
         for item in confluence_4h_h1:
             emoji = "🟢" if item['dir'] == "Bullish" else "🔴"
             report.append(f"- {emoji} **[[{item['symbol']}]]** ({item['dir']}): 4H (Higher Prob) + 1H (Lower Prob) align **{item['dir']}**! Highest probability 4H/1H entry. H1 Signal: `{item['h1_sig']}` at {item['h1_time']}.")
     else:
         report.append("- No 4H + 1H same-direction setups active today.")
-        
-    report.append(f"\n### ✅ 3. Strong 2-Timeframe Aligned Setups (Daily + 1H)")
-    if alignment_2tf:
-        for item in alignment_2tf:
-            emoji = "🟢" if item['dir'] == "Bullish" else "🔴"
-            report.append(f"- {emoji} **[[{item['symbol']}]]** ({item['dir']}): Daily and 1H align **{item['dir']}**! H1 Signal: `{item['h1_sig']}` at {item['h1_time']}. (4H: {item['h4_dir']}).")
-    else:
-        report.append("- No 2-timeframe setups active today.")
 
-    report.append(f"\n### 🔄 4. Retest Pullback Candidates (4H Trend vs 1H Counter-Pullback)")
+    if has_daily:
+        report.append(f"\n### ✅ 3. Strong 2-Timeframe Aligned Setups (Daily + 1H)")
+        if alignment_2tf:
+            for item in alignment_2tf:
+                emoji = "🟢" if item['dir'] == "Bullish" else "🔴"
+                report.append(f"- {emoji} **[[{item['symbol']}]]** ({item['dir']}): Daily and 1H align **{item['dir']}**! H1 Signal: `{item['h1_sig']}` at {item['h1_time']}. (4H: {item['h4_dir']}).")
+        else:
+            report.append("- No 2-timeframe setups active today.")
+
+    report.append(f"\n### 🔄 {retest_num}. Retest Pullback Candidates (4H Trend vs 1H Counter-Pullback)")
     if retest_pullbacks:
         for item in retest_pullbacks:
             report.append(f"- **[[{item['symbol']}]]**: 4H Macro is **{item['h4_dir']}** (High Prob), while 1H trigger is **{item['h1_dir']}** (`{item['h1_sig']}`). Watch for M15 exhaustion to re-enter 4H trend.")
@@ -357,7 +415,7 @@ def analyze_3tf_multi_timeframe(daily_records, h4_records, h1_records, target_da
 
 def main():
     parser = argparse.ArgumentParser(description="Binni's Alert Analysis")
-    parser.add_argument("--timeframe", choices=["H1", "4H", "H4", "DAILY", "D1", "multi", "3tf", "BULL_DAILY", "STOCKS_DAILY", "BULL", "STOCKS", "BEAR_DAILY", "BEAR", "BEAR_STOCKS"], default="multi", help="Timeframe or tab to analyze")
+    parser.add_argument("--timeframe", choices=["H1", "4H", "H4", "DAILY", "D1", "multi", "3tf", "H1_4H", "BULL_DAILY", "STOCKS_DAILY", "BULL", "STOCKS", "BEAR_DAILY", "BEAR", "BEAR_STOCKS"], default="multi", help="Timeframe or tab to analyze")
     parser.add_argument("--date", default=None, help="Target date YYYY-MM-DD")
     args = parser.parse_args()
     

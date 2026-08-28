@@ -41,6 +41,8 @@ To execute a live TAT alert analysis:
 
 1. **H1 Alert Analysis**:
    - Run `python3 scripts/binni_alert_analysis.py --timeframe H1` via `run_command`.
+   - **Daily Schedule Window**: Scheduled to run daily starting at **06:01 SGT**, running every hour (`06:01`, `07:01`, `08:01`, ..., `23:01`, `00:01`), and finishing with the final run at **00:01 SGT**. Paused overnight between `01:00` and `06:00 SGT` before resuming at `06:01 SGT` (cron expression: `1 0,6-23 * * *`).
+   - **4x-Daily Combined Review Times**: At **09:01, 13:01, 17:01, 21:01 SGT** — four of the runs above — run `python3 scripts/binni_alert_analysis.py --timeframe H1_4H` instead of `--timeframe H1`, folding a 4H TAT signal review into that hour's report. The 1H fetch + narrative must fully resolve before the 4H fetch + narrative starts (the script enforces this internally; do not interleave TradingView screenshot batches for the two timeframes either — capture 1H's new-alert charts, then 4H's). See §4.5 below for report formatting.
 
 2. **4H Alert Analysis**:
    - Run `python3 scripts/binni_alert_analysis.py --timeframe 4H` via `run_command`.
@@ -90,6 +92,15 @@ When synthesizing the alert data, analyze according to Binni's core pillars:
     - **High Probability (⭐⭐ — 4H Standalone Signal)**: 4H TAT signals carry **higher structural probability** and macro trend weight than 1H signals alone.
     - **Lower Probability (⭐ — 1H Standalone Signal)**: 1H TAT signals alone carry **lower probability** and higher noise risk; use primarily for tactical timing.
     - **Retest Execution (4H Trend vs 1H Pullback)**: When 4H is in one direction (e.g., Bearish) and 1H fires the opposite signal (e.g., Bullish), treat 1H as a temporary counter-trend pullback returning to 4H TAT boundaries for optimal risk-reward re-entry.
+12. **Explicit Per-Instrument Direction Rule in Cluster Tables**:
+    - In all TAT Alert Analysis reports and cluster summary tables, every instrument MUST explicitly specify its individual direction with visual indicators: `[[SYMBOL]] (🟢 Bull)` or `[[SYMBOL]] (🔴 Bear)`.
+    - In cluster summary tables, group or tag pairs explicitly (e.g., `[[CADCHF]] (🟢 Bull), [[USDCAD]] (🟢 Bull), [[EURCAD]] (🔴 Bear), [[NZDCAD]] (🔴 Bear), [[GBPCAD]] (🔴 Bear)`) so the exact direction of every single pair is immediately unambiguous and obvious to evaluate at a glance.
+
+### 📋 Standard Cluster Summary Table Template:
+
+| Cluster | Pairs & Instruments (with Explicit Direction) | Cluster Bias | Count | Conviction & Structural Significance |
+| :--- | :--- | :--- | :--- | :--- |
+| **Commodity & Cross FX (CAD Surge)** | `[[CADCHF]] (🟢 Bull)`, `[[USDCAD]] (🟢 Bull)`, `[[EURCAD]] (🔴 Bear)`, `[[NZDCAD]] (🔴 Bear)`, `[[GBPCAD]] (🔴 Bear)` | **Bullish CAD vs G10 / Bearish vs USD** | 5 (2 Bull / 3 Bear) | Loonie outperforming EUR, NZD, GBP, CHF |
 
 ---
 
@@ -98,9 +109,9 @@ When synthesizing the alert data, analyze according to Binni's core pillars:
 1. **Autonomous Service Account Protocol**:
    - Sheet data pulling and report updates MUST execute autonomously using native tools without prompting for user confirmation.
 2. **1H Analysis Header Timestamp Rule**:
-   - All 1H TAT analysis reports must include explicit SGT timestamps in the main title (e.g., `# 📈 1H TAT Analysis Report — YYYY-MM-DD [HH:MM SGT]`).
+   - All TAT analysis reports must include explicit SGT timestamps in the main title (e.g., `# 📈 TAT Alert Report — YYYY-MM-DD [HH:MM SGT]`).
 3. **Same-Day 1H Iteration & Diff Protocol**:
-   - When executing an update run on a date that already has a report file (e.g., `wiki/reports/tat_analysis/YYYY-MM-DD-1h-*-report.md`), do not overwrite existing content.
+   - When executing an update run on a date that already has a report file (`wiki/reports/tat_analysis/YYYY-MM-DD-tat-alert-report.md`), do not overwrite existing content.
 
    - Append a new section: `## 🕒 Intraday Update Run — [HH:MM SGT]`.
    - Include an explicit **Differences & Changes Highlights** table comparing alert counts, sentiment shifts, signals, and structural changes since the previous run.
@@ -108,6 +119,10 @@ When synthesizing the alert data, analyze according to Binni's core pillars:
    - Whenever a TAT alert analysis detects **NEW alerts** for specific instruments during the scan run, the report MUST explicitly state which symbol fired a new signal (with signal name, direction, and timestamp).
    - Execute `./scripts/tv_session.sh start` once, `./scripts/capture_tv_chart.sh <SYMBOL> <TIMEFRAME>` for each new alert symbol (which automatically generates timestamped filenames `YYMMDD-HHMMSS_<symbol>_<tf>_chart.png` for sorting), and `./scripts/tv_session.sh stop` once at the end.
    - Embed the captured chart screenshots under a dedicated `## 📸 New Alert Chart Screenshots` section in the report (`![<Symbol> Chart Screenshot](../../images/YYMMDD-HHMMSS_<symbol>_<tf>_chart.png)`) and present them in the response.
+5. **4x-Daily 1H+4H Combined Review Rule**:
+   - At the four combined-review times (09:01, 13:01, 17:01, 21:01 SGT — see §2.1), the appended section header becomes `## 🕒 Intraday Update Run — [HH:MM SGT] (1H + 4H Combined Review)`.
+   - The section must include the 4H cluster/theme narrative and the 4H+1H confluence/retest classification (⭐⭐⭐ dual-alignment and retest-pullback buckets) in addition to the normal 1H Differences & Changes Highlights table — all within the same single daily report file. No separate 4H report file is created for these 4 runs.
+   - New-alert screenshot capture (rule 4 above) applies to new alert symbols from either timeframe during these runs, captured in two sequential batches (1H's, then 4H's).
 
 
 
