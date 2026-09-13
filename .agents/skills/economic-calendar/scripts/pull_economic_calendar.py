@@ -46,6 +46,7 @@ try:
             time_val = event.find('time').text
             forecast = event.find('forecast').text if event.find('forecast') is not None else ""
             previous = event.find('previous').text if event.find('previous') is not None else ""
+            actual = event.find('actual').text if event.find('actual') is not None else ""
             detail_url = event.find('url').text if event.find('url') is not None else ""
             
             try:
@@ -65,6 +66,7 @@ try:
                 "event": title,
                 "forecast": forecast if forecast is not None else "",
                 "previous": previous if previous is not None else "",
+                "actual": actual if actual is not None else "",
                 "url": detail_url if detail_url is not None else ""
             })
 except Exception as e:
@@ -128,6 +130,7 @@ def fetch_tradingview_red_folder_events(start_dt, end_dt):
                             "event": ev.get('title', ''),
                             "forecast": str(ev.get('forecast')) if ev.get('forecast') is not None else "",
                             "previous": str(ev.get('previous')) if ev.get('previous') is not None else "",
+                            "actual": str(ev.get('actual')) if ev.get('actual') is not None else "",
                             "url": "https://www.tradingview.com/economic-calendar/"
                         })
     except Exception as e:
@@ -162,7 +165,7 @@ next_week_label = f"{next_week_start.strftime('%Y-%m-%d')} to {next_week_end.str
 
 markdown_lines = f"""---
 kind: note
-tags: [session, reference]
+tags: [session, reference, macro]
 updated: {date_str}
 sources: 2
 ---
@@ -173,26 +176,28 @@ Strict high-impact economic news releases (Red Folder events only) formatted in 
 
 ## This Week High-Impact Events ({this_week_label})
 
-| Date | Time (SGT) | Currency | Event | Forecast | Previous | Detail |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| Date | Time (SGT) | Currency | Event | Forecast | Previous | Actual | Detail |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 """
 
 for ev in this_week_events:
     curr = ev['currency']
+    actual = ev.get('actual') or "—"
     detail_link = f"[Detail]({ev['url']})" if ev['url'] else ""
-    markdown_lines += f"| {ev['date']} | {ev['time']} | {curr} | {ev['event']} | {ev['forecast']} | {ev['previous']} | {detail_link} |\n"
+    markdown_lines += f"| {ev['date']} | {ev['time']} | {curr} | {ev['event']} | {ev['forecast']} | {ev['previous']} | {actual} | {detail_link} |\n"
 
 markdown_lines += f"""
 ## Next Week High-Impact Events ({next_week_label})
 
-| Date | Time (SGT) | Currency | Event | Forecast | Previous | Detail |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| Date | Time (SGT) | Currency | Event | Forecast | Previous | Actual | Detail |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 """
 
 for ev in next_week_events:
     curr = ev['currency']
+    actual = ev.get('actual') or "—"
     detail_link = f"[Detail]({ev['url']})" if ev['url'] else ""
-    markdown_lines += f"| {ev['date']} | {ev['time']} | {curr} | {ev['event']} | {ev['forecast']} | {ev['previous']} | {detail_link} |\n"
+    markdown_lines += f"| {ev['date']} | {ev['time']} | {curr} | {ev['event']} | {ev['forecast']} | {ev['previous']} | {actual} | {detail_link} |\n"
 
 markdown_lines += """
 ## Sources
