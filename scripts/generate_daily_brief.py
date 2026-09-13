@@ -15,6 +15,8 @@ import datetime
 import subprocess
 from pathlib import Path
 
+from report_toc import build_toc
+
 WIKI_ROOT = Path("/Users/chriseah/obsidian/wiki-trades")
 
 CONF_LABELS = {
@@ -35,6 +37,118 @@ def run_command(cmd, cwd=WIKI_ROOT):
     out = res.stdout
     clean_lines = [l for l in out.splitlines() if not l.startswith("  ℹ️") and not l.startswith("🔑") and not l.startswith("✅ Successfully")]
     return "\n".join(clean_lines).strip()
+
+
+ECON_ROW_RE = re.compile(
+    r"^\|\s*(\d{4}-\d{2}-\d{2})\s*\|\s*([\d:]+)\s*\|\s*(\S+)\s*\|\s*(.+?)\s*\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*(.*?)\s*\|\s*(.*?)\s*\|$",
+    re.M,
+)
+
+
+def extract_todays_events(note_text, today_str):
+    """Return today's rows from the economic-calendar note's This Week table."""
+    m = re.search(r"## This Week High-Impact Events.*?\n\|.*?\n\|[-: |]+\n(.*?)(?=\n##|\Z)", note_text, re.S)
+    if not m:
+        return []
+    rows = []
+    for date, time, currency, event, forecast, previous, actual, detail in ECON_ROW_RE.findall(m.group(1)):
+        if date == today_str:
+            rows.append((time, currency, event, forecast, previous, actual, detail))
+    rows.sort(key=lambda r: r[0])
+    return rows
+
+
+# Currency -> (bank name, keywords identifying that bank's policy events in the
+# economic-calendar note's Event column).
+BANK_KEYWORDS = {
+    "USD": ("Fed", ("fed", "fomc")),
+    "EUR": ("ECB", ("ecb",)),
+    "GBP": ("BoE", ("boe",)),
+    "JPY": ("BoJ", ("boj",)),
+    "AUD": ("RBA", ("rba",)),
+    "NZD": ("RBNZ", ("rbnz",)),
+    "CAD": ("BoC", ("boc",)),
+    "CHF": ("SNB", ("snb",)),
+}
+POLICY_EVENT_KEYWORDS = ("interest rate decision", "rate decision", "monetary policy statement",
+                          "press conference", "minutes")
+
+TALLY_ROW_RE = re.compile(
+    r"^\|\s*(\S+)\s*\|\s*(.+?)\s*\|\s*(\d{4}-\d{2}-\d{2})\s*\|\s*(.+?)\s*\|$", re.M
+)
+
+
+def check_central_bank_tally_reminders(todays_events, tally_note_path, today_str):
+    """Flag banks whose policy event fired today but whose tally row hasn't been
+    updated since — a reminder that the conversational stance update was missed,
+    not an automatic stance judgment."""
+    if not tally_note_path.exists():
+        return []
+    tally_text = tally_note_path.read_text(encoding="utf-8")
+    last_changed = {}
+    m = re.search(r"## Current Stances.*?\n\|.*?\n\|[-: |]+\n(.*?)(?=\n##|\Z)", tally_text, re.S)
+    if m:
+        for bank, _stance, changed_date, _trigger in TALLY_ROW_RE.findall(m.group(1)):
+            last_changed[bank] = changed_date
+
+    reminders = []
+    flagged_banks = set()
+    for _time, currency, event, _forecast, _previous, actual, _detail in todays_events:
+        bank_info = BANK_KEYWORDS.get(currency)
+        if not bank_info:
+            continue
+        bank, keywords = bank_info
+        event_lower = event.lower()
+        is_policy_event = any(k in event_lower for k in keywords) and any(
+            k in event_lower for k in POLICY_EVENT_KEYWORDS
+        )
+        # Require the actual value to have posted — a date match alone doesn't mean
+        # the event has actually released yet (e.g. scheduled later today SGT), and
+        # re-checking a bank's site before that wastes a fetch on nothing new.
+        if not is_policy_event or bank in flagged_banks or not (actual and actual.strip() and actual.strip() != "—"):
+            continue
+        if last_changed.get(bank, "0000-00-00") < today_str:
+            reminders.append(f"- ⚠️ **{bank}** — \"{event}\" fired today but the tally was last updated {last_changed.get(bank, 'never')}. Update `wiki/notes/central-bank-tally.md`.")
+            flagged_banks.add(bank)
+    return reminders
+
+
+SENTIMENT_SUMMARY_RE = re.compile(
+    r"## (.+?) Summary\n"
+    r"Total articles analyzed: (\d+)\n"
+    r"Positive: \d+ \(([\d.]+)%\)\n"
+    r"Negative: \d+ \(([\d.]+)%\)\n"
+    r"Neutral: \d+ \(([\d.]+)%\)"
+)
+SENTIMENT_OVERALL_RE = re.compile(
+    r"## Overall Summary \(All Instruments\)\n"
+    r"Total articles analyzed: (\d+)\n"
+    r"Positive: \d+ \(([\d.]+)%\)\n"
+    r"Negative: \d+ \(([\d.]+)%\)\n"
+    r"Neutral: \d+ \(([\d.]+)%\)"
+)
+
+
+def summarize_sentiment_output(text):
+    """Condense market_sentiment.py's full headline dump into a per-instrument table.
+    The full headline+link detail lives in wiki/reports/market-sentiment/YYYY-MM-DD-market-sentiment.md
+    (appended by market_sentiment.py itself); embedding it verbatim here would balloon
+    the daily brief (19 instruments x up to ~70 links each)."""
+    rows = SENTIMENT_SUMMARY_RE.findall(text)
+    if not rows:
+        return "No sentiment data returned."
+
+    lines = ["| Instrument | Articles | Positive | Negative | Neutral |", "| :--- | :--- | :--- | :--- | :--- |"]
+    for label, total, pos, neg, neu in rows:
+        lines.append(f"| {label} | {total} | {pos}% | {neg}% | {neu}% |")
+
+    overall = SENTIMENT_OVERALL_RE.search(text)
+    if overall:
+        total, pos, neg, neu = overall.groups()
+        lines.append("")
+        lines.append(f"**Overall ({total} articles)**: {pos}% Positive / {neg}% Negative / {neu}% Neutral")
+
+    return "\n".join(lines)
 
 
 def get_previous_daily_brief(report_dir, today_str):
@@ -138,31 +252,58 @@ def generate_daily_brief():
     prev_top_setup = extract_top_setups(prev_brief) if prev_brief else "N/A"
     prev_content = prev_brief.read_text(encoding="utf-8") if prev_brief else ""
 
-    # 1. Live TradingView Daily-chart ZigZag structure scan -> currency strength
-    print("📡 1/6 Running live TradingView Daily-chart structure scan (tv brief)...")
+    # 1. Refresh the economic calendar (Red Folder events) and pull today's rows
+    print("📰 1/8 Refreshing economic calendar (Red Folder events)...")
+    econ_script = WIKI_ROOT / ".agents/skills/economic-calendar/scripts/pull_economic_calendar.py"
+    run_command([sys.executable, str(econ_script)])
+    econ_note_path = WIKI_ROOT / "wiki/notes/economic-calendar.md"
+    econ_note_text = econ_note_path.read_text(encoding="utf-8") if econ_note_path.exists() else ""
+    todays_events = extract_todays_events(econ_note_text, today_str)
+    tally_note_path = WIKI_ROOT / "wiki/notes/central-bank-tally.md"
+    tally_reminders = check_central_bank_tally_reminders(todays_events, tally_note_path, today_str)
+
+    # 2. Run market sentiment scan (Google News RSS + VADER across the instrument set)
+    print("🗞️ 2/8 Running market sentiment scan...")
+    # This machine is Intel/x86_64 macOS, pinned to older transformers/numpy
+    # (torch has no wheels past 2.2.2 for this platform) — use the x86 fork.
+    # market_sentiment.py is the Apple Silicon original; keep both in sync.
+    sentiment_script = WIKI_ROOT / "scripts/market_sentiment_x86.py"
+    sentiment_output = run_command([sys.executable, str(sentiment_script)])
+
+    # 3. Live TradingView Daily-chart ZigZag structure scan -> currency strength
+    print("📡 3/8 Running live TradingView Daily-chart structure scan (tv brief)...")
     tv_session = WIKI_ROOT / "scripts/tv_session.sh"
     tv_brief_dump = Path(f"/tmp/tv_brief_{today_str}.json")
     run_command(["bash", str(tv_session), "start"])
-    run_command(["bash", "-c", f"cd ~/tradingview-mcp && node src/cli/index.js brief -r ./rules.json > {tv_brief_dump}"])
-    run_command([sys.executable, str(WIKI_ROOT / "scripts/build_daily_bias.py"), str(tv_brief_dump), "--date", today_str])
+    # --timeout-ms 600000: the CLI's own default (180s) is too short for an
+    # 84-symbol live scan, which can legitimately run several minutes.
+    run_command(["bash", "-c", f"cd ~/tradingview-mcp && node src/cli/index.js brief --timeout-ms 600000 -r ./rules.json > {tv_brief_dump}"])
+    if not tv_brief_dump.exists() or tv_brief_dump.stat().st_size == 0:
+        # run_command() discards the child's return code, so a timed-out/failed
+        # brief scan would otherwise pass an empty file to build_daily_bias.py
+        # silently and downstream steps would fall back to stale prior-day data
+        # with no trace of why. Skip the call and say so instead.
+        print("⚠️ tv brief scan timed out or produced no output — using stale daily-bias data")
+    else:
+        run_command([sys.executable, str(WIKI_ROOT / "scripts/build_daily_bias.py"), str(tv_brief_dump), "--date", today_str])
     run_command(["bash", str(tv_session), "stop"])
 
-    print("📊 2/6 Computing Currency Strength from ZigZag structure...")
+    print("📊 4/8 Computing Currency Strength from ZigZag structure...")
     cs_script = WIKI_ROOT / "scripts/tat_currency_strength.py"
     run_command([sys.executable, str(cs_script), "--date", today_str])
 
-    # 2. Run Daily Alert Analysis & 3TF Synthesis
-    print("📈 3/6 Running Daily & 3TF TAT Alert Analysis...")
+    # 5. Run Daily Alert Analysis & 3TF Synthesis
+    print("📈 5/8 Running Daily & 3TF TAT Alert Analysis...")
     analysis_script = WIKI_ROOT / "scripts/binni_alert_analysis.py"
     daily_output = run_command([sys.executable, str(analysis_script), "--timeframe", "DAILY"])
     multi_output = run_command([sys.executable, str(analysis_script), "--timeframe", "3tf"])
 
-    # 3. Run D-R-H-R Scanner
-    print("🎯 4/6 Scanning D-R-H-R Setups...")
+    # 6. Run D-R-H-R Scanner
+    print("🎯 6/8 Scanning D-R-H-R Setups...")
     drhr_script = WIKI_ROOT / "scripts/scan_drhr_setups.py"
     drhr_output = run_command([sys.executable, str(drhr_script)])
 
-    # 4. Read Currency Strength Note data
+    # 7. Read Currency Strength Note data
     cs_note_path = WIKI_ROOT / "wiki/notes/currency-strength.md"
     cs_table = ""
     if cs_note_path.exists():
@@ -183,13 +324,13 @@ def generate_daily_brief():
                 table_lines.append(line)
         cs_table = "\n".join(table_lines)
 
-    # 5. Derive today's top setup from the actual D-R-H-R scan, and capture its chart
+    # 8. Derive today's top setup from the actual D-R-H-R scan, and capture its chart
     setups = parse_drhr_setups(drhr_output)
     top = pick_top_setup(setups)
     if top:
         symbol, direction, score, conf_label, h1_sig, h1_time, event = top
         top_setup_line = f"⭐⭐⭐ **[[{symbol}]] {direction}** ({conf_label}, H1 Signal `{h1_sig}` at {h1_time})."
-        print(f"📸 5/6 Capturing top setup chart for [[{symbol}]] 1H...")
+        print(f"📸 7/8 Capturing top setup chart for [[{symbol}]] 1H...")
         top_img_file = capture_top_setup_screenshot(symbol, "60")
         top_setup_section = f"""### {'🟢' if direction == 'Long' else '🔴'} [[{symbol}]] 1H Chart (Top D-R-H-R Setup — {conf_label})
 ![{symbol} 1H Chart Screenshot]({top_img_file if top_img_file else 'N/A'})""" if top_img_file else f"No screenshot captured for [[{symbol}]]."
@@ -224,7 +365,24 @@ def generate_daily_brief():
     prev_dual_n = extract_dual_signal_count(prev_content)
     curr_dual_n = extract_dual_signal_count(multi_output)
 
-    # 6. Build the Differences & Changes Highlights table entirely from parsed data (no fabricated narrative)
+    # Today's high-impact economic events table
+    if todays_events:
+        econ_rows = "\n".join(
+            f"| {time} | {currency} | {event} | {forecast} | {previous} | {actual or '—'} | {detail} |"
+            for time, currency, event, forecast, previous, actual, detail in todays_events
+        )
+        econ_section = f"""| Time (SGT) | Currency | Event | Forecast | Previous | Actual | Detail |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+{econ_rows}"""
+    else:
+        econ_section = "No high-impact (Red Folder) economic events scheduled today."
+
+    tally_reminder_section = (
+        "\n".join(tally_reminders) if tally_reminders
+        else "No stale tally entries — all today's central bank events are reflected in `wiki/notes/central-bank-tally.md`."
+    )
+
+    # 9. Build the Differences & Changes Highlights table entirely from parsed data (no fabricated narrative)
     diff_rows = [
         ("Top Flagged Setup", prev_top_setup, top_setup_line, "See setup detail above"),
         ("Strongest Currency", prev_cs_str, curr_cs_str, "Mechanically derived from scoreboard"),
@@ -244,6 +402,22 @@ def generate_daily_brief():
 
 ---
 
+## 📰 Today's High-Impact Economic Events
+
+{econ_section}
+
+See [Economic Calendar](../../notes/economic-calendar.md) for the full This Week / Next Week schedule.
+
+---
+
+## 🏦 Central Bank Tally Reminders
+
+{tally_reminder_section}
+
+See [Central Bank Policy Tally](../../notes/central-bank-tally.md) for the current Hawkish/Dovish/Neutral stance per bank.
+
+---
+
 ## 🔄 Differences & Changes Highlights (vs {prev_date_str} Brief)
 
 | Metric / Focus Area | Previous Brief ({prev_date_str}) | Current Brief ({today_str}) | Shift |
@@ -257,6 +431,14 @@ def generate_daily_brief():
 ![Currency Strength Trend Graph](../../images/currency-strength-graph.svg)
 
 {cs_table}
+
+---
+
+## 🗞️ Market Sentiment (News-Based)
+
+{summarize_sentiment_output(sentiment_output)}
+
+See [Market Sentiment](../../reports/market-sentiment/{today_str}-market-sentiment.md) for the full headline-level breakdown and news-flow summary.
 
 ---
 
@@ -281,7 +463,15 @@ def generate_daily_brief():
 ## 📚 Bookkeeping Discipline Applied
 - **Daily Brief Filed**: `wiki/reports/daily_brief/{today_str}.md`
 - **SVG Graph Output**: `wiki/images/currency-strength-graph.svg`
+- **Economic Calendar Refreshed**: `wiki/notes/economic-calendar.md`
+- **Central Bank Tally Checked**: `wiki/notes/central-bank-tally.md`
+- **Market Sentiment Report Updated**: `wiki/reports/market-sentiment/{today_str}-market-sentiment.md`
 """
+
+    toc_block = build_toc(report_content)
+    if toc_block:
+        title_line, _, rest = report_content.partition("\n")
+        report_content = f"{title_line}\n\n{toc_block}\n{rest.lstrip(chr(10))}"
 
     report_file.write_text(report_content, encoding="utf-8")
     print(f"✅ Daily Brief with Differences & Changes Highlights generated: {report_file}")
