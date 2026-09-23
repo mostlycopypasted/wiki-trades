@@ -22,7 +22,11 @@ GIDS = {
     "STOCKS": "1875176436",
     "BEAR_DAILY": "1088333741",
     "BEAR": "1088333741",
-    "BEAR_STOCKS": "1088333741"
+    "BEAR_STOCKS": "1088333741",
+    "FOREX_D": "462165474",
+    "BATS": "520189562",
+    "TV_STOCKS": "520189562",
+    "STOCKS_TV": "520189562"
 }
 
 def try_public_csv(gid="0"):
@@ -89,7 +93,7 @@ def fetch_sheet_records(timeframe="H1"):
 
 def main():
     parser = argparse.ArgumentParser(description="Fetch Google Sheet alert records")
-    parser.add_argument("--timeframe", choices=["H1", "4H", "H4", "DAILY", "D1", "1D"], default="H1", help="Timeframe tab to fetch (default: H1)")
+    parser.add_argument("--timeframe", choices=sorted(GIDS.keys()), default="H1", help="Timeframe/tab key to fetch (default: H1)")
     args = parser.parse_args()
     
     records = fetch_sheet_records(args.timeframe)
