@@ -312,11 +312,13 @@ def generate_daily_brief():
     drhr_script = WIKI_ROOT / "scripts/scan_drhr_setups.py"
     drhr_output = run_command([sys.executable, str(drhr_script)])
 
-    # 7. Watchlist TAT signal snapshot (forex_list.json — same list the scan used)
-    # Reads the daily_brief/{date}.json already written in step 3 — no extra scan.
-    print("🗺️ 7/9 Building watchlist TAT signal snapshot...")
+    # 7. Watchlist Daily charts (forex_list.json — same list the scan used).
+    # Signal state comes from the daily_brief/{date}.json already written in step 3
+    # (no extra scan); --capture then batch-screenshots one Daily chart per
+    # instrument in a single TradingView session. This is the slowest step.
+    print("🗺️ 7/9 Capturing watchlist Daily charts...")
     watchlist_script = WIKI_ROOT / "scripts/watchlist_signals.py"
-    watchlist_output = run_command([sys.executable, str(watchlist_script), "--date", today_str])
+    watchlist_output = run_command([sys.executable, str(watchlist_script), "--date", today_str, "--capture"])
 
     # 8. Read Currency Strength Note data
     cs_note_path = WIKI_ROOT / "wiki/notes/currency-strength.md"
@@ -463,9 +465,9 @@ See [Market Sentiment](../../reports/market-sentiment/{today_str}-market-sentime
 
 ---
 
-## 🗺️ Daily Watchlist Signal Snapshot (forex_list.json)
+## 🗺️ Daily Watchlist Charts (forex_list.json)
 
-_Current on-chart TAT signal state for every instrument in `forex_list.json`, read from the same live Daily scan that drove this brief. This is a **snapshot of standing signals**, not a fresh-signal feed — new Daily signals are tracked by the Daily Signals skill in [Daily Signals](../daily-signals/{today_str}_Daily_Signals.md)._
+_One Daily chart per instrument in `forex_list.json`, captured live in a single batched TradingView session, with the standing TAT signal state from the same scan that drove this brief. Signal labels carry no timestamp, so these are **standing signals**, not a fresh-signal feed — new Daily signals are tracked by the Daily Signals skill in [Daily Signals](../daily-signals/{today_str}_Daily_Signals.md)._
 
 {watchlist_output.strip()}
 

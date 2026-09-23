@@ -46,10 +46,11 @@ To run a Daily chart scan:
      2. Runs the 4H + 1H TAT Alert Confluence review (`binni_alert_analysis.py --timeframe 3tf --no-daily`).
         The Daily alert sheet is deliberately excluded — that timeframe is owned by the `daily-signal-tracker` (Daily Signals) skill.
      3. Runs the D-R-H-R Short-Term Trading Scanner (`scan_drhr_setups.py`).
-     3b. Runs `scripts/watchlist_signals.py`, which reads the `daily_brief/{date}.json` from step 1 (no extra scan)
-         and renders the current TAT signal state for every instrument in `~/tradingview-mcp/forex_list.json`
-         as the **Daily Watchlist Signal Snapshot** table. Labels carry no timestamp, so this is standing state,
-         not a fresh-signal feed.
+     3b. Runs `scripts/watchlist_signals.py --capture`, which reads the `daily_brief/{date}.json` from step 1 for
+         signal state (no extra scan) and batch-captures one Daily chart per instrument in
+         `~/tradingview-mcp/forex_list.json` — one TradingView session for the whole batch, per the Batch Session
+         Rule — rendering the **Daily Watchlist Charts** gallery. Labels carry no timestamp, so this is standing
+         state, not a fresh-signal feed. Slowest step: ~20 min for ~70 charts.
      4. Captures a live TradingView chart screenshot using `./scripts/capture_tv_chart.sh` for the top D-R-H-R setup (if any) and saves it to `wiki/images/`.
      5. Assembles and writes the complete Daily Brief report to `wiki/reports/daily_brief/YYYY-MM-DD.md`.
 
