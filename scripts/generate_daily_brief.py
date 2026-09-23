@@ -200,7 +200,9 @@ def extract_drhr_counts(text):
 
 
 def extract_dual_signal_count(text):
-    m = re.search(r"### 🔥 2\..*?\n(.*?)(?=\n###|\Z)", text, re.S)
+    # Section number shifts (2. with Daily present, 1. without) — match either,
+    # since prev_content is yesterday's report and may use the old numbering.
+    m = re.search(r"### 🔥 \d+\..*?\n(.*?)(?=\n###|\Z)", text, re.S)
     if not m:
         return 0
     return len(re.findall(r"^\s*-\s*[🟢🔴]", m.group(1), re.M))
@@ -253,7 +255,7 @@ def generate_daily_brief():
     prev_content = prev_brief.read_text(encoding="utf-8") if prev_brief else ""
 
     # 1. Refresh the economic calendar (Red Folder events) and pull today's rows
-    print("📰 1/8 Refreshing economic calendar (Red Folder events)...")
+    print("📰 1/9 Refreshing economic calendar (Red Folder events)...")
     econ_script = WIKI_ROOT / ".agents/skills/economic-calendar/scripts/pull_economic_calendar.py"
     run_command([sys.executable, str(econ_script)])
     econ_note_path = WIKI_ROOT / "wiki/notes/economic-calendar.md"
@@ -263,7 +265,7 @@ def generate_daily_brief():
     tally_reminders = check_central_bank_tally_reminders(todays_events, tally_note_path, today_str)
 
     # 2. Run market sentiment scan (Google News RSS + VADER across the instrument set)
-    print("🗞️ 2/8 Running market sentiment scan...")
+    print("🗞️ 2/9 Running market sentiment scan...")
     # This machine is Intel/x86_64 macOS, pinned to older transformers/numpy
     # (torch has no wheels past 2.2.2 for this platform) — use the x86 fork.
     # market_sentiment.py is the Apple Silicon original; keep both in sync.
@@ -271,13 +273,18 @@ def generate_daily_brief():
     sentiment_output = run_command([sys.executable, str(sentiment_script)])
 
     # 3. Live TradingView Daily-chart ZigZag structure scan -> currency strength
-    print("📡 3/8 Running live TradingView Daily-chart structure scan (tv brief)...")
+    print("📡 3/9 Running live TradingView Daily-chart structure scan (tv brief)...")
     tv_session = WIKI_ROOT / "scripts/tv_session.sh"
     tv_brief_dump = Path(f"/tmp/tv_brief_{today_str}.json")
     run_command(["bash", str(tv_session), "start"])
-    # --timeout-ms 600000: the CLI's own default (180s) is too short for an
-    # 84-symbol live scan, which can legitimately run several minutes.
-    run_command(["bash", "-c", f"cd ~/tradingview-mcp && node src/cli/index.js brief --timeout-ms 600000 -r ./rules.json > {tv_brief_dump}"])
+    # The brief scans forex_list.json, not the 88-symbol rules.json superset: it is
+    # a complete drop-in rules file (same schema, default_timeframe D, same layout
+    # and bias_criteria) and it is the list the user actually curates. Keeping the
+    # scan and the Daily Watchlist Signal Snapshot on one source means an added
+    # symbol shows up in both instead of being silently dropped for lack of scan data.
+    # --timeout-ms 600000: the CLI's own default (180s) is too short for a live
+    # multi-symbol scan, which can legitimately run several minutes.
+    run_command(["bash", "-c", f"cd ~/tradingview-mcp && node src/cli/index.js brief --timeout-ms 600000 -r ./forex_list.json > {tv_brief_dump}"])
     if not tv_brief_dump.exists() or tv_brief_dump.stat().st_size == 0:
         # run_command() discards the child's return code, so a timed-out/failed
         # brief scan would otherwise pass an empty file to build_daily_bias.py
@@ -288,22 +295,30 @@ def generate_daily_brief():
         run_command([sys.executable, str(WIKI_ROOT / "scripts/build_daily_bias.py"), str(tv_brief_dump), "--date", today_str])
     run_command(["bash", str(tv_session), "stop"])
 
-    print("📊 4/8 Computing Currency Strength from ZigZag structure...")
+    print("📊 4/9 Computing Currency Strength from ZigZag structure...")
     cs_script = WIKI_ROOT / "scripts/tat_currency_strength.py"
     run_command([sys.executable, str(cs_script), "--date", today_str])
 
-    # 5. Run Daily Alert Analysis & 3TF Synthesis
-    print("📈 5/8 Running Daily & 3TF TAT Alert Analysis...")
+    # 5. Run 4H + 1H Alert Confluence Synthesis
+    # The Daily timeframe is deliberately excluded (--no-daily): the Daily alert
+    # sheet is owned by the Daily Signals skill (scan_daily_signals.py, 05:45 SGT).
+    # The brief's own Daily view comes from the watchlist snapshot in step 7.
+    print("📈 5/9 Running 4H + 1H TAT Alert Analysis...")
     analysis_script = WIKI_ROOT / "scripts/binni_alert_analysis.py"
-    daily_output = run_command([sys.executable, str(analysis_script), "--timeframe", "DAILY"])
-    multi_output = run_command([sys.executable, str(analysis_script), "--timeframe", "3tf"])
+    multi_output = run_command([sys.executable, str(analysis_script), "--timeframe", "3tf", "--no-daily"])
 
     # 6. Run D-R-H-R Scanner
-    print("🎯 6/8 Scanning D-R-H-R Setups...")
+    print("🎯 6/9 Scanning D-R-H-R Setups...")
     drhr_script = WIKI_ROOT / "scripts/scan_drhr_setups.py"
     drhr_output = run_command([sys.executable, str(drhr_script)])
 
-    # 7. Read Currency Strength Note data
+    # 7. Watchlist TAT signal snapshot (forex_list.json — same list the scan used)
+    # Reads the daily_brief/{date}.json already written in step 3 — no extra scan.
+    print("🗺️ 7/9 Building watchlist TAT signal snapshot...")
+    watchlist_script = WIKI_ROOT / "scripts/watchlist_signals.py"
+    watchlist_output = run_command([sys.executable, str(watchlist_script), "--date", today_str])
+
+    # 8. Read Currency Strength Note data
     cs_note_path = WIKI_ROOT / "wiki/notes/currency-strength.md"
     cs_table = ""
     if cs_note_path.exists():
@@ -324,13 +339,13 @@ def generate_daily_brief():
                 table_lines.append(line)
         cs_table = "\n".join(table_lines)
 
-    # 8. Derive today's top setup from the actual D-R-H-R scan, and capture its chart
+    # 9. Derive today's top setup from the actual D-R-H-R scan, and capture its chart
     setups = parse_drhr_setups(drhr_output)
     top = pick_top_setup(setups)
     if top:
         symbol, direction, score, conf_label, h1_sig, h1_time, event = top
         top_setup_line = f"⭐⭐⭐ **[[{symbol}]] {direction}** ({conf_label}, H1 Signal `{h1_sig}` at {h1_time})."
-        print(f"📸 7/8 Capturing top setup chart for [[{symbol}]] 1H...")
+        print(f"📸 8/9 Capturing top setup chart for [[{symbol}]] 1H...")
         top_img_file = capture_top_setup_screenshot(symbol, "60")
         top_setup_section = f"""### {'🟢' if direction == 'Long' else '🔴'} [[{symbol}]] 1H Chart (Top D-R-H-R Setup — {conf_label})
 ![{symbol} 1H Chart Screenshot]({top_img_file if top_img_file else 'N/A'})""" if top_img_file else f"No screenshot captured for [[{symbol}]]."
@@ -382,7 +397,7 @@ def generate_daily_brief():
         else "No stale tally entries — all today's central bank events are reflected in `wiki/notes/central-bank-tally.md`."
     )
 
-    # 9. Build the Differences & Changes Highlights table entirely from parsed data (no fabricated narrative)
+    # 10. Build the Differences & Changes Highlights table entirely from parsed data (no fabricated narrative)
     diff_rows = [
         ("Top Flagged Setup", prev_top_setup, top_setup_line, "See setup detail above"),
         ("Strongest Currency", prev_cs_str, curr_cs_str, "Mechanically derived from scoreboard"),
@@ -442,9 +457,17 @@ See [Market Sentiment](../../reports/market-sentiment/{today_str}-market-sentime
 
 ---
 
-## 📈 Daily & Multi-Timeframe TAT Alert Synthesis
+## 📈 4H + 1H TAT Alert Synthesis
 
 {multi_output.strip()}
+
+---
+
+## 🗺️ Daily Watchlist Signal Snapshot (forex_list.json)
+
+_Current on-chart TAT signal state for every instrument in `forex_list.json`, read from the same live Daily scan that drove this brief. This is a **snapshot of standing signals**, not a fresh-signal feed — new Daily signals are tracked by the Daily Signals skill in [Daily Signals](../daily-signals/{today_str}_Daily_Signals.md)._
+
+{watchlist_output.strip()}
 
 ---
 

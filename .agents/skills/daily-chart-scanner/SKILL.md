@@ -1,6 +1,6 @@
 ---
 name: daily-chart-scanner
-description: Skill for reading Daily (1-day) charts on TradingView using the watchlist extracted from rules.json (~/tradingview-mcp/rules.json), scanning TAT trend bars, market structure (Bullish, Bearish, Squeeze, Expand), and TAT signals, and evaluating setups against the Retest Execution concept.
+description: Skill for reading Daily (1-day) charts on TradingView using the watchlist extracted from forex_list.json (~/tradingview-mcp/forex_list.json), scanning TAT trend bars, market structure (Bullish, Bearish, Squeeze, Expand), and TAT signals, and evaluating setups against the Retest Execution concept.
 license: MIT
 metadata:
   author: AI Trading Team
@@ -14,15 +14,15 @@ metadata:
 
 # Daily Chart Scanner & Watchlist Skill
 
-This skill defines the standardized protocol for scanning Daily (1-day / 1440-minute) charts on TradingView by extracting the active watchlist from `~/tradingview-mcp/rules.json`, capturing TAT trend indicators, ZigZag market structures, and TAT signals, and filtering candidates against the **Retest Execution** concept.
+This skill defines the standardized protocol for scanning Daily (1-day / 1440-minute) charts on TradingView by extracting the active watchlist from `~/tradingview-mcp/forex_list.json`, capturing TAT trend indicators, ZigZag market structures, and TAT signals, and filtering candidates against the **Retest Execution** concept.
 
 ---
 
 ## 📋 1. Watchlist & Configuration Source
 
-The active watchlist and scanning configuration are driven dynamically by `/Users/chriseah/tradingview-mcp/rules.json`:
+The active watchlist and scanning configuration are driven dynamically by `/Users/chriseah/tradingview-mcp/forex_list.json`:
 
-- **Watchlist**: Extracted from `rules.json`, which serves as the master combined default watchlist containing **88 unique instruments** across Forex, Commodities, Indices, Crypto, US Equities (`us_stocks.json`), and Singapore/Hong Kong Equities & Indices (`sghk_stocks.json`).
+- **Watchlist**: Extracted from `forex_list.json` — the user-curated list the Daily Brief actually scans, covering Forex, Commodities, Indices, Crypto and selected US Equities. It is a complete drop-in rules file (same schema as `rules.json`), so it is passed straight to `tv brief -r`. `rules.json` remains the 88-instrument master superset used by the Weekly brief and other scans.
 - **Timeframe**: Fixed to **`D`** (Daily / 1-day resolution).
 - **Bias Criteria**:
   - `🟢 Bullish`: TAT `Up Trend` is active (1.0).
@@ -42,9 +42,14 @@ To run a Daily chart scan:
 2. **Execute Master Daily Brief Generator**:
    - Run `python3 scripts/generate_daily_brief.py` via `run_command`.
    - This master script automatically:
-     1. Runs a live `tv brief` scan of the watchlist, converts it via `scripts/build_daily_bias.py` into `~/tradingview-mcp/daily_brief/{date}.json`, then runs `scripts/tat_currency_strength.py` to derive Currency Strength from ZigZag Daily-chart structure and render `wiki/notes/currency-strength.md` + `wiki/images/currency-strength-graph.svg` (replaces the retired `currency-strength-tracker` marketsmadeclear scrape).
-     2. Runs Daily & 3-Timeframe TAT Alert Analysis (`binni_alert_analysis.py`).
+     1. Runs a live `tv brief` scan of `~/tradingview-mcp/forex_list.json` (the curated list, not the `rules.json` superset), converts it via `scripts/build_daily_bias.py` into `~/tradingview-mcp/daily_brief/{date}.json`, then runs `scripts/tat_currency_strength.py` to derive Currency Strength from ZigZag Daily-chart structure and render `wiki/notes/currency-strength.md` + `wiki/images/currency-strength-graph.svg` (replaces the retired `currency-strength-tracker` marketsmadeclear scrape).
+     2. Runs the 4H + 1H TAT Alert Confluence review (`binni_alert_analysis.py --timeframe 3tf --no-daily`).
+        The Daily alert sheet is deliberately excluded — that timeframe is owned by the `daily-signal-tracker` (Daily Signals) skill.
      3. Runs the D-R-H-R Short-Term Trading Scanner (`scan_drhr_setups.py`).
+     3b. Runs `scripts/watchlist_signals.py`, which reads the `daily_brief/{date}.json` from step 1 (no extra scan)
+         and renders the current TAT signal state for every instrument in `~/tradingview-mcp/forex_list.json`
+         as the **Daily Watchlist Signal Snapshot** table. Labels carry no timestamp, so this is standing state,
+         not a fresh-signal feed.
      4. Captures a live TradingView chart screenshot using `./scripts/capture_tv_chart.sh` for the top D-R-H-R setup (if any) and saves it to `wiki/images/`.
      5. Assembles and writes the complete Daily Brief report to `wiki/reports/daily_brief/YYYY-MM-DD.md`.
 

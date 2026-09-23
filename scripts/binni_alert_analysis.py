@@ -67,13 +67,13 @@ def get_sgt_now():
     return now.strftime("%H:%M SGT")
 
 
-def analyze_alerts_binni_method(target_date=None, timeframe="H1", run_time=None):
+def analyze_alerts_binni_method(target_date=None, timeframe="H1", run_time=None, include_daily=True):
     if run_time is None:
         run_time = get_sgt_now()
     tf = timeframe.upper()
     
     if tf in ["MULTI", "3TF", "FULL"]:
-        daily_records = fetch_sheet_records("DAILY")
+        daily_records = fetch_sheet_records("DAILY") if include_daily else []
         h4_records = fetch_sheet_records("4H")
         h1_records = fetch_sheet_records("H1")
         return analyze_3tf_multi_timeframe(daily_records, h4_records, h1_records, target_date)
@@ -417,9 +417,12 @@ def main():
     parser = argparse.ArgumentParser(description="Binni's Alert Analysis")
     parser.add_argument("--timeframe", choices=["H1", "4H", "H4", "DAILY", "D1", "multi", "3tf", "H1_4H", "BULL_DAILY", "STOCKS_DAILY", "BULL", "STOCKS", "BEAR_DAILY", "BEAR", "BEAR_STOCKS"], default="multi", help="Timeframe or tab to analyze")
     parser.add_argument("--date", default=None, help="Target date YYYY-MM-DD")
+    parser.add_argument("--no-daily", action="store_true",
+                        help="For 3tf/multi: skip the Daily alert sheet and produce a 4H+1H confluence review "
+                             "(the Daily timeframe is owned by the Daily Signals skill)")
     args = parser.parse_args()
     
-    analyze_alerts_binni_method(args.date, args.timeframe)
+    analyze_alerts_binni_method(args.date, args.timeframe, include_daily=not args.no_daily)
 
 if __name__ == "__main__":
     main()
