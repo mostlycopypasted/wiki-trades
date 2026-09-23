@@ -1,6 +1,6 @@
 ---
 name: daily-signal-tracker
-description: Daily Signals — a once-daily 05:01 SGT snapshot of every Daily-timeframe TAT signal across three sources (Forex D, TradingView Stocks/bats, and the Yahoo Bull+Bear stock lists), with a chart screenshot per instrument and a single dated report at wiki/reports/daily-signals/YYYY-MM-DD_Daily_Signals.md. Daily timeframe only — no Weekly state read, no 1H/4H confluence, no multi-day watch tracking. Asian (SGX/HKEX) stocks are taken from the previous calendar day because they close at 17:00 SGT, after the run. The Daily-timeframe counterpart to tat-alert-analysis (H1/4H, 5x-daily) and equity-news-finder (equity news).
+description: Daily Signals — a once-daily morning snapshot (Orca automation fires 05:45 SGT Mon–Sat; 05:01 SGT is the data-window reference, not the clock time) of every Daily-timeframe TAT signal across three sources (Forex D, TradingView Stocks/bats, and the Yahoo Bull+Bear stock lists), with a chart screenshot per instrument and a single dated report at wiki/reports/daily-signals/YYYY-MM-DD_Daily_Signals.md. Daily timeframe only — no Weekly state read, no 1H/4H confluence, no multi-day watch tracking. Asian (SGX/HKEX) stocks are taken from the previous calendar day because they close at 17:00 SGT, after the run. The Daily-timeframe counterpart to tat-alert-analysis (H1/4H, 5x-daily) and equity-news-finder (equity news).
 license: MIT
 metadata:
   author: AI Trading Team
@@ -17,7 +17,9 @@ metadata:
 
 # Daily Signals Skill
 
-Runs **once per day at 05:01 SGT**. Detects every new Daily-timeframe signal across the three sources below, screenshots each instrument's Daily chart once, and files a single dated report.
+Runs **once per day**. The Orca automation **"Daily Signals"** fires at **05:45 SGT, Mon–Sat** (`rrule: 45 5 * * 1-6`). **05:01 SGT is the data-window reference, not the run time** — the forex Daily bar closes 05:00 SGT and its alerts write at 05:01, which is what defines *which* signals belong to a given day. The run itself is deliberately offset to 05:45 to clear the Daily Brief / Morning Pipeline (05:01) and the TAT Combined 1H+4H review (05:31): all three drive the same TradingView session, and a ~45-chart batch racing either of them is the failure CLAUDE.md's Batch TradingView Session Rule exists to prevent.
+
+Detects every new Daily-timeframe signal across the three sources below, screenshots each instrument's Daily chart once, and files a single dated report.
 
 > **v3.0.0 (2026-09-23) replaced the v2 "Daily Signal Tracker".** v2 tracked one forex tab through a 14-day watch window driven by a Weekly / 1H / 4H classification engine (confluence → pullback → elbow → invalidation). That engine and the watch window are **gone**. This is a snapshot, not a tracker. The v2 state in `scripts/daily_signal_watches.json` (52 watches) and the per-watch reports in `wiki/reports/tat_analysis/daily-signals/` are **frozen historical artifacts** — read them for history, never write to them.
 
@@ -75,7 +77,7 @@ The script pulls all four tabs, normalizes both schemas, applies the date window
 The Asian offset is gap-free and overlap-free: a `.SI`/`.HK` row dated `D−1` is first visible to the run on `D`, because the run on `D−1` was looking at `D−2`. Verified live: `O39.SI` dated 23/09 (fired ~17:00 SGT that day) correctly belongs to the 24/09 run, not the 23/09 one.
 
 **Two guards, both built into the script:**
-- *05:01 race.* Forex rows land at `05:01:02`–`05:01:04`, seconds after the run begins. If the Forex window is empty and it is before 05:02 SGT, the script waits 90s and refetches once. `--no-retry` disables this for ad hoc runs.
+- *05:01 race.* Forex rows land at `05:01:02`–`05:01:04`. At the scheduled 05:45 slot this is long settled, but the guard protects ad hoc runs launched at 05:0x: if the Forex window is empty and it is before 05:02 SGT, the script waits 90s and refetches once. `--no-retry` disables it.
 - *Weekends and missed runs.* `scripts/daily_signal_seen.json` holds a watermark plus a 45-day seen-set keyed `source|date|instrument|signal`. The sweep runs from the watermark forward, so a skipped run or a long weekend backfills rather than silently dropping signals. Use `--backfill-from YYYY-MM-DD` to force a wider sweep.
 
 > `scripts/daily_signal_seen.json` is a **dedupe ledger, not watch state**. If it is missing, the run will treat every signal in the window as new — that is recoverable, but say so in the log rather than pretending it was a normal run. If it is present but corrupt, the script exits rather than recreating it.
