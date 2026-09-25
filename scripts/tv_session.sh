@@ -14,6 +14,24 @@ if [ "$ACTION" = "start" ]; then
     echo "✅ TradingView session active."
 
 elif [ "$ACTION" = "stop" ]; then
+    # Captures render as Line (capture_tv_chart.sh sets it per chart — see the
+    # Chart Type Standard in CLAUDE.md), but the user reads the chart as
+    # candlesticks when they open TradingView themselves. Restore the resting
+    # type BEFORE the Cmd+S below so the saved layout — and therefore the next
+    # launch, including after a reboot — comes up as Candles. Override with
+    # RESTORE_CHART_TYPE=<type>, or RESTORE_CHART_TYPE= (empty) to skip.
+    RESTORE_CHART_TYPE="${RESTORE_CHART_TYPE-Candles}"
+    if [ -n "$RESTORE_CHART_TYPE" ] && pgrep -f TradingView > /dev/null 2>&1; then
+        echo "🕯️ Restoring chart type to $RESTORE_CHART_TYPE..."
+        node src/cli/index.js type "$RESTORE_CHART_TYPE" > /dev/null 2>&1 || true
+        RESTORED=$(node src/cli/index.js type 2>/dev/null | grep -o '"chart_type": *"[^"]*"' | head -1 | sed 's/.*"chart_type": *"//;s/"$//')
+        if [ "$RESTORED" = "$RESTORE_CHART_TYPE" ]; then
+            echo "✅ Chart type restored to $RESTORED."
+        else
+            echo "⚠️ Could not confirm chart type restore to '$RESTORE_CHART_TYPE' (got '$RESTORED')."
+        fi
+    fi
+
     echo "💾 Saving chart layout (Cmd+S)..."
     node src/cli/index.js ui keyboard s --meta > /dev/null 2>&1 || true
     sleep 1.5
