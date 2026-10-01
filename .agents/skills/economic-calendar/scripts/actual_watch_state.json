@@ -1,0 +1,136 @@
+{
+  "events": {
+    "2026-09-29|12:30|AUD|Cash Rate": {
+      "attempts": 20,
+      "currency": "AUD",
+      "date": "2026-09-29",
+      "due_at": "2026-09-29T12:33:00",
+      "event": "Cash Rate",
+      "last_checked": "2026-10-01T09:30:00.526818",
+      "status": "gave_up",
+      "time": "12:30"
+    },
+    "2026-09-30|09:30|AUD|CPI m/m": {
+      "attempts": 20,
+      "currency": "AUD",
+      "date": "2026-09-30",
+      "due_at": "2026-09-30T09:33:00",
+      "event": "CPI m/m",
+      "last_checked": "2026-10-01T09:30:00.526818",
+      "status": "gave_up",
+      "time": "09:30"
+    },
+    "2026-09-30|09:30|AUD|CPI y/y": {
+      "attempts": 20,
+      "currency": "AUD",
+      "date": "2026-09-30",
+      "due_at": "2026-09-30T09:33:00",
+      "event": "CPI y/y",
+      "last_checked": "2026-10-01T09:30:00.526818",
+      "status": "gave_up",
+      "time": "09:30"
+    },
+    "2026-09-30|09:30|AUD|Trimmed Mean CPI m/m": {
+      "attempts": 20,
+      "currency": "AUD",
+      "date": "2026-09-30",
+      "due_at": "2026-09-30T09:33:00",
+      "event": "Trimmed Mean CPI m/m",
+      "last_checked": "2026-10-01T09:30:00.526818",
+      "status": "gave_up",
+      "time": "09:30"
+    },
+    "2026-09-30|20:30|USD|Core PCE Price Index m/m": {
+      "attempts": 20,
+      "currency": "USD",
+      "date": "2026-09-30",
+      "due_at": "2026-09-30T20:33:00",
+      "event": "Core PCE Price Index m/m",
+      "last_checked": "2026-10-01T09:30:00.526818",
+      "status": "gave_up",
+      "time": "20:30"
+    },
+    "2026-09-30|20:30|USD|Final GDP q/q": {
+      "attempts": 20,
+      "currency": "USD",
+      "date": "2026-09-30",
+      "due_at": "2026-09-30T20:33:00",
+      "event": "Final GDP q/q",
+      "last_checked": "2026-10-01T09:30:00.526818",
+      "status": "gave_up",
+      "time": "20:30"
+    },
+    "2026-10-02|20:30|USD|Average Hourly Earnings m/m": {
+      "attempts": 0,
+      "currency": "USD",
+      "date": "2026-10-02",
+      "due_at": "2026-10-02T20:33:00",
+      "event": "Average Hourly Earnings m/m",
+      "status": "pending",
+      "time": "20:30"
+    },
+    "2026-10-02|20:30|USD|Non-Farm Employment Change": {
+      "attempts": 0,
+      "currency": "USD",
+      "date": "2026-10-02",
+      "due_at": "2026-10-02T20:33:00",
+      "event": "Non-Farm Employment Change",
+      "status": "pending",
+      "time": "20:30"
+    },
+    "2026-10-02|20:30|USD|Unemployment Rate": {
+      "attempts": 0,
+      "currency": "USD",
+      "date": "2026-10-02",
+      "due_at": "2026-10-02T20:33:00",
+      "event": "Unemployment Rate",
+      "status": "pending",
+      "time": "20:30"
+    },
+    "2026-10-05|22:00|USD|ISM Services PMI": {
+      "attempts": 0,
+      "currency": "USD",
+      "date": "2026-10-05",
+      "due_at": "2026-10-05T22:03:00",
+      "event": "ISM Services PMI",
+      "status": "pending",
+      "time": "22:00"
+    },
+    "2026-10-06|22:00|CAD|Ivey PMI s.a": {
+      "attempts": 0,
+      "currency": "CAD",
+      "date": "2026-10-06",
+      "due_at": "2026-10-06T22:03:00",
+      "event": "Ivey PMI s.a",
+      "status": "pending",
+      "time": "22:00"
+    },
+    "2026-10-08|14:00|EUR|Balance of Trade": {
+      "attempts": 0,
+      "currency": "EUR",
+      "date": "2026-10-08",
+      "due_at": "2026-10-08T14:03:00",
+      "event": "Balance of Trade",
+      "status": "pending",
+      "time": "14:00"
+    },
+    "2026-10-09|20:30|CAD|Unemployment Rate": {
+      "attempts": 0,
+      "currency": "CAD",
+      "date": "2026-10-09",
+      "due_at": "2026-10-09T20:33:00",
+      "event": "Unemployment Rate",
+      "status": "pending",
+      "time": "20:30"
+    },
+    "2026-10-09|22:00|USD|Michigan Consumer Sentiment Prel": {
+      "attempts": 0,
+      "currency": "USD",
+      "date": "2026-10-09",
+      "due_at": "2026-10-09T22:03:00",
+      "event": "Michigan Consumer Sentiment Prel",
+      "status": "pending",
+      "time": "22:00"
+    }
+  }
+}

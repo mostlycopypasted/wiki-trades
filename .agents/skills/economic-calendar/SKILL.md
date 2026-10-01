@@ -41,17 +41,33 @@ The skill explicitly filters out medium/low impact indicators including:
 
 ## Setup & Execution
 
-1. **Execution**: The scraper script pulls from the Forex Factory feed (This Week) and TradingView API (Next Week / fallback), applying strict Red Folder filters.
-2. **Cron Schedule**: A cron schedule runs the script every Sunday at 5:00 PM (17:00 SGT).
-   - Cron Expression: `0 17 * * 0`
+1. **Execution**: The scraper script pulls from the Forex Factory feed (This Week) and TradingView API (Next Week / fallback), applying strict Red Folder filters. It **fully rewrites** both tables on every run.
+2. **Weekly full-pull schedule**: `com.chriseah.wikitrades.econcalendar-weekly` (launchd LaunchAgent, `~/Library/LaunchAgents/`) runs `pull_economic_calendar.py` directly every Sunday at 17:00 SGT (`StartCalendarInterval` Weekday 0 / Hour 17 / Minute 0). Plain `python3`, no Claude session — the pull is fully mechanical. Logs: `~/Library/Logs/wiki-trades-econcalendar-weekly.{log,err.log}`.
 3. **Outputs**:
    - Economic Calendar note: `wiki/notes/economic-calendar.md` — each row carries Forecast, Previous, and **Actual** (populated once an event has genuinely released; blank/`—` beforehand, which is normal for anything still upcoming).
 
+## Actual Auto-Refresh (added 2026-10-01)
+
+Between weekly full-pulls, `refresh_actuals.py` keeps the **Actual** column current without waiting for the next Sunday rewrite:
+
+- **Mechanism**: `com.chriseah.wikitrades.econcalendar-actuals` (launchd LaunchAgent, `StartInterval` 120s) runs `python3 .agents/skills/economic-calendar/scripts/refresh_actuals.py` every 2 minutes, unconditionally — pure Python, no Claude session, so the 2-minute cadence costs nothing but a local file parse on the (common) cycles where nothing is due. Logs: `~/Library/Logs/wiki-trades-econcalendar-actuals.{log,err.log}`.
+- **Timetable**: on every run it reparses `wiki/notes/economic-calendar.md`'s This Week / Next Week tables and rebuilds a rolling timetable in `actual_watch_state.json` (next to the script) — one entry per still-blank, data-bearing Red Folder row (events with no Forecast/Previous at all, e.g. "X Speaks" or a press conference, are never watched — they never get a numeric Actual). Entries older than 10 days and no longer present in the note are pruned. This is the "note of the next event and subsequent events" the note stays the single source of truth; the state file only remembers what's already been checked.
+- **Trigger**: an entry becomes due once `now >= event time + 3 minutes` (`GRACE_MINUTES`). When due, the script re-fetches the Forex Factory feed (same one `pull_economic_calendar.py` uses) once for the whole run, batching all due entries, with a per-date TradingView range fetch as a secondary fallback. One fetch per run covers every due entry, not one fetch per event.
+- **Patch, not rewrite**: a match found patches **only that row's** Actual cell via an exact string replace of the row's markdown line — the rest of the file (and any other in-flight edits) is untouched. It then appends one `wiki/log.md` line via `append_log.py` listing everything patched that run. No index/hot-cache rewrite — this is a field refresh, not an ingest.
+- **Giving up**: after `MAX_ATTEMPTS` (20, ≈40 minutes of retrying at the 2-minute cadence) with no Actual found, the entry is marked `gave_up` and stops being retried — bounds how hard this hammers Forex Factory's feed for an event whose Actual never posts there (rate-limit note below).
+- **Rate-limit note**: Forex Factory's feed (`nfs.faireconomy.media`) 429s under heavy/bursty polling. The script already fetches at most once per run and only when something is due, and fails a given cycle silently (prints a warning, retries next cycle) rather than crashing — but don't add more frequent pollers against the same endpoint without widening this margin.
+- **Feeds this**: `scripts/generate_daily_brief.py`'s Central Bank Tally Reminders already gate on the Actual field being populated — this refresher is what makes that gate fire promptly (minutes, not until next Sunday) instead of going stale.
+
 ## CLI Commands
 
-To manually trigger a calendar update:
+To manually trigger a full calendar rewrite:
 ```bash
 python3 .agents/skills/economic-calendar/scripts/pull_economic_calendar.py
+```
+
+To manually run one Actual auto-refresh pass (normally driven by the launchd job above):
+```bash
+python3 .agents/skills/economic-calendar/scripts/refresh_actuals.py
 ```
 
 ## Macro Analysis Specialist Persona
@@ -105,6 +121,16 @@ All 8 banks' official source pages are now on file.
 3. Register it with `update_index.py` (category `sources`) and `append_log.py`.
 4. Feed the extracted stance into the **Central Bank Policy Tally** update procedure above, citing the new source page.
 5. If the affected currency already has an entity page (e.g. `wiki/entities/nzdusd.md`), update it in place per AGENTS.md's cross-reference-aggressively rule rather than leaving the connection only in the source page.
+
+## Market-Implied Rate Probability Tools
+
+Unlike the Source Pages above (a bank's own after-the-fact statement), these tools show the market's *forward-looking* probability of a bank's next move — useful context going into a Fed decision rather than after one.
+
+| Bank | Tool | Notes |
+| :--- | :--- | :--- |
+| Fed | [CME FedWatch Tool](https://www.cmegroup.com/markets/interest-rates/cme-fedwatch-tool.html) | Derives implied Fed Funds rate-hike/cut/hold probabilities from 30-Day Fed Funds futures pricing. Page is JS-rendered — needs ego-browser, plain WebFetch only returns the page shell (same caveat as BoE above). |
+
+Check it ahead of a Fed FOMC meeting (see `central-bank-tally.md`'s `## Next Scheduled Updates` for the date) as supporting context for the post-meeting stance call — it doesn't replace reading the actual statement, but a probability that has swung hard into one outcome (e.g. >90% priced for a hike) is a useful sanity check against the eventual decision, and a live read on how "priced in" the outcome already is when discussing [[EURUSD]]/[[USDJPY]]/DXY reaction risk. Does not drive a stance update on its own — the update procedure above still requires the actual decision or statement.
 
 ## Divergence Gap & Neutral Hold Alerts
 
