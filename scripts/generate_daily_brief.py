@@ -303,9 +303,12 @@ def generate_daily_brief():
     # The Daily timeframe is deliberately excluded (--no-daily): the Daily alert
     # sheet is owned by the Daily Signals skill (scan_daily_signals.py, 05:45 SGT).
     # The brief's own Daily view comes from the watchlist snapshot in step 7.
+    # --date is passed explicitly (as in steps 3/4/7) so the section is pinned to
+    # today rather than inferred from whichever date has the most sheet rows.
     print("📈 5/9 Running 4H + 1H TAT Alert Analysis...")
     analysis_script = WIKI_ROOT / "scripts/binni_alert_analysis.py"
-    multi_output = run_command([sys.executable, str(analysis_script), "--timeframe", "3tf", "--no-daily"])
+    multi_output = run_command([sys.executable, str(analysis_script),
+                                "--timeframe", "3tf", "--no-daily", "--date", today_str])
 
     # 6. Run D-R-H-R Scanner
     print("🎯 6/9 Scanning D-R-H-R Setups...")

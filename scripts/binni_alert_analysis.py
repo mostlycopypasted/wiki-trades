@@ -3,6 +3,7 @@ import sys
 import json
 import argparse
 import datetime
+import zoneinfo
 from pathlib import Path
 from collections import defaultdict
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -54,6 +55,16 @@ def get_latest_full_date(records):
         d = get_record_date(r)
         if d:
             counts[d] += 1
+    if not counts:
+        return None
+    # Today (SGT) wins outright when it has any records at all. The >=5 threshold
+    # below exists to skip stray/partial rows, but applying it to the current day
+    # made early-morning runs fall back to yesterday and mislabel the report: at
+    # 05:03 SGT the Daily Brief saw only the 05:01 rollover prints (4 H1 records,
+    # one short of the threshold) and reported the previous day's date and signals.
+    today_sgt = datetime.datetime.now(zoneinfo.ZoneInfo("Asia/Singapore")).strftime("%Y-%m-%d")
+    if counts.get(today_sgt):
+        return today_sgt
     dates = sorted(list(counts.keys()), reverse=True)
     for d in dates:
         if counts[d] >= 5:
@@ -62,7 +73,6 @@ def get_latest_full_date(records):
 
 def get_sgt_now():
     """Return current time in SGT as 'HH:MM SGT'."""
-    import zoneinfo
     now = datetime.datetime.now(zoneinfo.ZoneInfo("Asia/Singapore"))
     return now.strftime("%H:%M SGT")
 
