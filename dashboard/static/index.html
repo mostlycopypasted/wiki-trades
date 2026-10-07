@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trading Desk</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%23199e70'/%3E%3Cpath d='M3 11l3-4 3 2 4-5' stroke='white' stroke-width='1.6' fill='none'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="logo">▲</span> Trading Desk</div>
+    <nav class="nav" id="nav">
+      <a href="#desk" data-view="desk">Desk</a>
+      <a href="#signals" data-view="signals">TAT Signals</a>
+      <a href="#analysis" data-view="analysis">Analysis</a>
+      <a href="#calendar" data-view="calendar">Calendar</a>
+      <a href="#ahh" data-view="ahh">Session Ideas</a>
+      <a href="#brief" data-view="brief">Daily Brief</a>
+      <a href="#my-watchlist" data-view="my-watchlist">My Watchlist</a>
+      <a href="#journal" data-view="journal">Journal</a>
+    </nav>
+    <div class="search-wrap">
+      <span class="ico">⌕</span>
+      <input id="q" type="search" placeholder="Search symbol or text…" autocomplete="off" list="symlist" aria-label="Search">
+      <kbd>/</kbd>
+      <datalist id="symlist"></datalist>
+    </div>
+    <div class="status">
+      <span class="dot" id="sheetDot"></span><span class="lbl" id="sheetLbl">Sheet…</span>
+      <button class="iconbtn" id="refreshBtn" title="Re-pull alert sheet and reload wiki data">↻</button>
+      <button class="iconbtn" id="themeBtn" title="Toggle light/dark">◐</button>
+    </div>
+  </header>
+
+  <main id="main">
+    <section id="view-desk" class="view"></section>
+    <section id="view-signals" class="view hidden"></section>
+    <section id="view-analysis" class="view hidden"></section>
+    <section id="view-calendar" class="view hidden"></section>
+    <section id="view-ahh" class="view hidden"></section>
+    <section id="view-brief" class="view hidden"></section>
+    <section id="view-my-watchlist" class="view hidden"></section>
+    <section id="view-journal" class="view hidden"></section>
+  </main>
+
+  <div class="scrim" id="scrim"></div>
+  <aside class="drawer" id="drawer" aria-label="Instrument detail">
+    <div class="dh"><h2 id="dSym"></h2><span id="dTags" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center"></span><span style="margin-left:auto"></span><button class="iconbtn" id="dClose">✕</button></div>
+    <div class="dbody" id="dBody"></div>
+  </aside>
+  <div class="modal" id="modal" role="dialog">
+    <div class="mh"><span class="ttl" id="mTitle"></span><span style="margin-left:auto"></span><button class="iconbtn" id="mClose">✕</button></div>
+    <div class="mb"><div class="md" id="mBody"></div></div>
+  </div>
+  <div class="lightbox" id="lightbox"><img id="lbImg" alt=""><div class="cap" id="lbCap"></div></div>
+  <div class="tooltip" id="tooltip"></div>
+
+  <script src="/static/charts.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

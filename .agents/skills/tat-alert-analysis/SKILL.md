@@ -137,6 +137,8 @@ When synthesizing the alert data, analyze according to Binni's core pillars:
      ```
    - Each entry is Obsidian's native `[[#Exact Heading Text]]` wikilink format — copy the `## ` line's text **verbatim** (emoji, brackets, case, punctuation unchanged). Do NOT use markdown-style `[Text](#slug)` links or any lowercased/hyphenated slug — Obsidian's CommonMark-based renderer does not resolve those for heading anchors, only wikilinks.
    - Never embed a `[[SYMBOL]]` wikilink inside a `## ` heading line itself (only in body text) — nested double-brackets break the TOC entry's own wikilink parsing.
-
-
+7. **My-Watchlist 4H Screenshot Protocol**:
+   - Trigger condition: only the 4H leg of the 5 scheduled `--timeframe H1_4H` runs (06:15/09:01/13:01/17:01/21:01 SGT — see §2.1) — never standalone/ad hoc `--timeframe 4H` or `3tf` runs.
+   - Immediately after that 4H leg completes, run `python3 scripts/capture_watchlist_charts.py --watchlist ~/tradingview-mcp/my_watchlist.json --timeframe 4H` (captures all 16 `my_watchlist.json` instruments every time, independent of whether any new alert fired) and embed its output under a `## 📸 My-Watchlist 4H Chart Screenshots` section, separate from the New Alert Screenshot section (rule 4 above).
+   - See AGENTS.md's **My-Watchlist 4H Screenshot Rule** for the full rationale; subject to the same screenshot verification rule (open at least one captured image with Read before filing).
 
