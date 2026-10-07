@@ -22,6 +22,8 @@ import datetime
 import json
 from pathlib import Path
 
+from report_toc import build_toc
+
 WIKI_ROOT = Path("/Users/chriseah/obsidian/wiki-trades")
 BRIEF_DIR = Path.home() / "tradingview-mcp" / "daily_brief"
 RULES_PATH = Path.home() / "tradingview-mcp" / "rules.json"
@@ -391,6 +393,10 @@ def write_deep_dive_report(dates, history_scores, data_by_date, pair_counts, squ
         report.append("| :--- | :--- | :--- |")
         for sym, old_s, new_s in changes:
             report.append(f"| **{sym}** | {old_s} | {new_s} |")
+
+    toc_block = build_toc("\n".join(report))
+    if toc_block:
+        report.insert(3, toc_block)  # after title + generated-date line + blockquote, before first ## heading
 
     full_md = "\n".join(report)
     report_file_path = WIKI_ROOT / "wiki" / "reports" / f"{latest_d}-tat-currency-strength-report.md"

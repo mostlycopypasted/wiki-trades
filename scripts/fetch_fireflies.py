@@ -13,6 +13,7 @@ import re
 import argparse
 import urllib.request
 import urllib.error
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 RAW_DIR = BASE_DIR / "raw"
 RECORDINGS_DIR = RAW_DIR / "recordings"
+ARCHIVE_RECORDINGS_DIR = Path("/Users/chriseah/pCloud Drive/4 Archives/Fireflies Recordings")
 SYNC_STATE_FILE = BASE_DIR / ".fireflies_sync.json"
 ENV_FILE = BASE_DIR / ".env"
 
@@ -171,13 +173,71 @@ mutation DeleteTranscript($id: String!) {
 }
 """
 
-def delete_remote_transcript(api_key, transcript_id):
-    """Delete a transcript from Fireflies.ai cloud."""
+def archive_mp3_file(mp3_path_or_name, archive_dir=ARCHIVE_RECORDINGS_DIR):
+    """Move an MP3 recording file to the pCloud archive directory."""
+    if not mp3_path_or_name:
+        return False
+    src_path = Path(mp3_path_or_name)
+    if not src_path.is_absolute():
+        src_path = BASE_DIR / src_path
+    if not src_path.exists():
+        fallback_path = RECORDINGS_DIR / src_path.name
+        if fallback_path.exists():
+            src_path = fallback_path
+        else:
+            return False
+
+    try:
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        dest_path = archive_dir / src_path.name
+        shutil.move(str(src_path), str(dest_path))
+        print(f"  📦 Archived audio recording to: {dest_path}")
+        return True
+    except Exception as e:
+        print(f"  ⚠️ Warning: Failed to archive {src_path.name} to {archive_dir}: {e}")
+        return False
+
+def archive_all_recordings(recordings_dir=RECORDINGS_DIR, archive_dir=ARCHIVE_RECORDINGS_DIR):
+    """Move all MP3 files in recordings directory to the pCloud archive."""
+    if not recordings_dir.exists():
+        print("No recordings directory found.")
+        return 0
+    mp3_files = list(recordings_dir.glob("*.mp3"))
+    if not mp3_files:
+        print(f"No MP3 files found in {recordings_dir.relative_to(BASE_DIR)}.")
+        return 0
+
+    print(f"Archiving {len(mp3_files)} MP3 recording(s) to {archive_dir}...")
+    archived_count = 0
+    for mp3 in mp3_files:
+        if archive_mp3_file(mp3, archive_dir):
+            archived_count += 1
+    print(f"✅ Successfully archived {archived_count}/{len(mp3_files)} MP3 file(s).")
+    return archived_count
+
+def delete_remote_transcript(api_key, transcript_id, state=None, archive_audio=True):
+    """Delete a transcript from Fireflies.ai cloud and move local recording to pCloud archive."""
     print(f"  🗑️ Deleting transcript {transcript_id} from Fireflies.ai cloud...")
     res = graphql_query(api_key, DELETE_TRANSCRIPT_MUTATION, {"id": transcript_id})
     deleted = res.get("deleteTranscript")
     if deleted:
         print(f"  ✅ Successfully deleted '{deleted.get('title')}' (ID: {deleted.get('id')}) from Fireflies.ai.")
+        if archive_audio:
+            archived = False
+            # Check if recorded in sync state
+            if state and "processed" in state and transcript_id in state["processed"]:
+                mp3_file = state["processed"][transcript_id].get("mp3_file")
+                if mp3_file and archive_mp3_file(mp3_file):
+                    state["processed"][transcript_id]["archived_mp3"] = str(ARCHIVE_RECORDINGS_DIR / Path(mp3_file).name)
+                    archived = True
+
+            # If not yet archived, search in recordings directory by slugified title or ID
+            if not archived and RECORDINGS_DIR.exists():
+                title_slug = slugify(deleted.get("title", ""))
+                for p in RECORDINGS_DIR.glob("*.mp3"):
+                    if title_slug in p.name:
+                        archive_mp3_file(p)
+                        break
         return True
     return False
 
@@ -348,9 +408,14 @@ def main():
     parser.add_argument("--all-titles", action="store_true", help="Fetch all meeting titles (skip trading session title filter)")
     parser.add_argument("--delete-from-fireflies", action="store_true", help="Delete transcript from Fireflies cloud after successful local download")
     parser.add_argument("--delete-id", help="Delete a specific transcript from Fireflies.ai cloud by ID directly")
-
+    parser.add_argument("--archive-all", action="store_true", help="Move all MP3 files from raw/recordings/ to pCloud archive")
+    parser.add_argument("--no-archive", action="store_true", help="Skip moving local MP3 file to pCloud archive after cloud deletion")
 
     args = parser.parse_args()
+
+    if args.archive_all:
+        archive_all_recordings()
+        return
 
     api_key = get_api_key(args.api_key)
     if not api_key:
@@ -361,11 +426,12 @@ def main():
         print("  3. CLI flag: python scripts/fetch_fireflies.py --api-key 'your_key'")
         sys.exit(1)
 
-    if args.delete_id:
-        delete_remote_transcript(api_key, args.delete_id)
-        return
-
     state = load_sync_state()
+
+    if args.delete_id:
+        delete_remote_transcript(api_key, args.delete_id, state=state, archive_audio=not args.no_archive)
+        save_sync_state(state)
+        return
 
     try:
         if args.id:
@@ -420,7 +486,7 @@ def main():
 
             # Delete from Fireflies cloud if requested
             if args.delete_from_fireflies:
-                delete_remote_transcript(api_key, t_id)
+                delete_remote_transcript(api_key, t_id, state=state, archive_audio=not args.no_archive)
 
         save_sync_state(state)
         print(f"\n✅ Sync complete. Processed {processed_count} new transcript(s).")

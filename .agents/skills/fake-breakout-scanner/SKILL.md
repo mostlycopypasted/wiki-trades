@@ -65,10 +65,18 @@ Wait for the long-tail candle to fully close before acting on it — don't front
 ## 📊 3. Report Delivery Structure
 
 When reporting scan results to the user:
-1. **Summary counts**: total Long vs. Short candidates found, and how many are `TRIGGERED` vs. `ARMED`.
-2. **Triggered setups first**, each with: symbol, direction, wash line price, spike/broken-structure level, last close, and the re-entry rule to apply.
-3. **Armed setups**: flagged as pattern candidates to watch, not yet actionable.
-4. **New alert screenshots** (if any symbol newly triggered), per the protocol above.
+1. **If this scan's results are filed as a standalone report** (not just a chat reply) — e.g. under `wiki/reports/tat_analysis/`: place a Table of Contents immediately after the title, built last (after the rest of the report's `## ` sections exist), linking to every section via Obsidian's native `[[#Exact Heading Text]]` wikilink anchors (verbatim heading text — do not slugify). Wrap it in:
+   ```
+   <!-- TOC:START -->
+   **📑 Table of Contents**
+
+   - [[#Heading text]]
+   <!-- TOC:END -->
+   ```
+2. **Summary counts**: total Long vs. Short candidates found, and how many are `TRIGGERED` vs. `ARMED`.
+3. **Triggered setups first**, each with: symbol, direction, wash line price, spike/broken-structure level, last close, and the re-entry rule to apply.
+4. **Armed setups**: flagged as pattern candidates to watch, not yet actionable.
+5. **New alert screenshots** (if any symbol newly triggered), per the protocol above.
 
 ---
 

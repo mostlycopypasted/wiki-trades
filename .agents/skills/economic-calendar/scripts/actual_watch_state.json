@@ -61,30 +61,33 @@
       "time": "20:30"
     },
     "2026-10-02|20:30|USD|Average Hourly Earnings m/m": {
-      "attempts": 0,
+      "attempts": 20,
       "currency": "USD",
       "date": "2026-10-02",
       "due_at": "2026-10-02T20:33:00",
       "event": "Average Hourly Earnings m/m",
-      "status": "pending",
+      "last_checked": "2026-10-02T21:13:26.236654",
+      "status": "gave_up",
       "time": "20:30"
     },
     "2026-10-02|20:30|USD|Non-Farm Employment Change": {
-      "attempts": 0,
+      "attempts": 20,
       "currency": "USD",
       "date": "2026-10-02",
       "due_at": "2026-10-02T20:33:00",
       "event": "Non-Farm Employment Change",
-      "status": "pending",
+      "last_checked": "2026-10-02T21:13:26.236654",
+      "status": "gave_up",
       "time": "20:30"
     },
     "2026-10-02|20:30|USD|Unemployment Rate": {
-      "attempts": 0,
+      "attempts": 20,
       "currency": "USD",
       "date": "2026-10-02",
       "due_at": "2026-10-02T20:33:00",
       "event": "Unemployment Rate",
-      "status": "pending",
+      "last_checked": "2026-10-02T21:13:26.236654",
+      "status": "gave_up",
       "time": "20:30"
     },
     "2026-10-05|22:00|USD|ISM Services PMI": {
@@ -114,6 +117,15 @@
       "status": "pending",
       "time": "14:00"
     },
+    "2026-10-09|20:30|CAD|Employment Change": {
+      "attempts": 0,
+      "currency": "CAD",
+      "date": "2026-10-09",
+      "due_at": "2026-10-09T20:33:00",
+      "event": "Employment Change",
+      "status": "pending",
+      "time": "20:30"
+    },
     "2026-10-09|20:30|CAD|Unemployment Rate": {
       "attempts": 0,
       "currency": "CAD",
@@ -131,6 +143,123 @@
       "event": "Michigan Consumer Sentiment Prel",
       "status": "pending",
       "time": "22:00"
+    },
+    "2026-10-13|08:30|AUD|NAB Business Confidence": {
+      "attempts": 0,
+      "currency": "AUD",
+      "date": "2026-10-13",
+      "due_at": "2026-10-13T08:33:00",
+      "event": "NAB Business Confidence",
+      "status": "pending",
+      "time": "08:30"
+    },
+    "2026-10-13|22:00|USD|Existing Home Sales": {
+      "attempts": 0,
+      "currency": "USD",
+      "date": "2026-10-13",
+      "due_at": "2026-10-13T22:03:00",
+      "event": "Existing Home Sales",
+      "status": "pending",
+      "time": "22:00"
+    },
+    "2026-10-14|09:30|CNY|Inflation Rate YoY": {
+      "attempts": 0,
+      "currency": "CNY",
+      "date": "2026-10-14",
+      "due_at": "2026-10-14T09:33:00",
+      "event": "Inflation Rate YoY",
+      "status": "pending",
+      "time": "09:30"
+    },
+    "2026-10-14|11:00|CNY|Balance of Trade": {
+      "attempts": 0,
+      "currency": "CNY",
+      "date": "2026-10-14",
+      "due_at": "2026-10-14T11:03:00",
+      "event": "Balance of Trade",
+      "status": "pending",
+      "time": "11:00"
+    },
+    "2026-10-14|11:00|CNY|Exports YoY": {
+      "attempts": 0,
+      "currency": "CNY",
+      "date": "2026-10-14",
+      "due_at": "2026-10-14T11:03:00",
+      "event": "Exports YoY",
+      "status": "pending",
+      "time": "11:00"
+    },
+    "2026-10-14|11:00|CNY|Imports YoY": {
+      "attempts": 0,
+      "currency": "CNY",
+      "date": "2026-10-14",
+      "due_at": "2026-10-14T11:03:00",
+      "event": "Imports YoY",
+      "status": "pending",
+      "time": "11:00"
+    },
+    "2026-10-14|20:30|USD|Core Inflation Rate MoM": {
+      "attempts": 0,
+      "currency": "USD",
+      "date": "2026-10-14",
+      "due_at": "2026-10-14T20:33:00",
+      "event": "Core Inflation Rate MoM",
+      "status": "pending",
+      "time": "20:30"
+    },
+    "2026-10-14|20:30|USD|Core Inflation Rate YoY": {
+      "attempts": 0,
+      "currency": "USD",
+      "date": "2026-10-14",
+      "due_at": "2026-10-14T20:33:00",
+      "event": "Core Inflation Rate YoY",
+      "status": "pending",
+      "time": "20:30"
+    },
+    "2026-10-14|20:30|USD|Inflation Rate MoM": {
+      "attempts": 0,
+      "currency": "USD",
+      "date": "2026-10-14",
+      "due_at": "2026-10-14T20:33:00",
+      "event": "Inflation Rate MoM",
+      "status": "pending",
+      "time": "20:30"
+    },
+    "2026-10-14|20:30|USD|Inflation Rate YoY": {
+      "attempts": 0,
+      "currency": "USD",
+      "date": "2026-10-14",
+      "due_at": "2026-10-14T20:33:00",
+      "event": "Inflation Rate YoY",
+      "status": "pending",
+      "time": "20:30"
+    },
+    "2026-10-15|14:00|GBP|GDP MoM": {
+      "attempts": 0,
+      "currency": "GBP",
+      "date": "2026-10-15",
+      "due_at": "2026-10-15T14:03:00",
+      "event": "GDP MoM",
+      "status": "pending",
+      "time": "14:00"
+    },
+    "2026-10-15|20:30|USD|PPI MoM": {
+      "attempts": 0,
+      "currency": "USD",
+      "date": "2026-10-15",
+      "due_at": "2026-10-15T20:33:00",
+      "event": "PPI MoM",
+      "status": "pending",
+      "time": "20:30"
+    },
+    "2026-10-15|21:30|USD|Retail Sales MoM": {
+      "attempts": 0,
+      "currency": "USD",
+      "date": "2026-10-15",
+      "due_at": "2026-10-15T21:33:00",
+      "event": "Retail Sales MoM",
+      "status": "pending",
+      "time": "21:30"
     }
   }
 }

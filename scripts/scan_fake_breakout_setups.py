@@ -14,7 +14,7 @@ fake-breakout setups (see wiki/concepts/wash-and-rinse.md), in both directions:
   closed bar closing above that high.
 
 This generalizes the pattern first logged ad-hoc for BTCUSD in the 2026-08-01
-Weekly Review (wiki/sources/2026-08-01-weekly-review.md / wiki/entities/btcusd.md)
+Weekly Review (wiki/AHH Session Notes/2026-08-01-weekly-review.md / wiki/entities/btcusd.md)
 into a repeatable scan across the full watchlist.
 
 Watchlist source: the latest ~/tradingview-mcp/daily_brief/{date}.json (built by

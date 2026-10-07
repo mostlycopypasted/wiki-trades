@@ -193,6 +193,7 @@ sleep 2
 # dialog still open in the screenshot). Escape is a no-op when nothing is
 # open, so press it unconditionally as cheap insurance before every capture.
 run_cli ui keyboard Escape || true
+run_cli ui eval 'var b=document.querySelector("[data-name=\"close\"], [aria-label=\"Close\"], button[class*=\"close\"]"); if(b) b.click();' || true
 sleep 0.5
 
 # 2. Reset chart scale and view (Alt+R)
