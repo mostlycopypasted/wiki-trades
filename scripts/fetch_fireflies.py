@@ -215,31 +215,93 @@ def archive_all_recordings(recordings_dir=RECORDINGS_DIR, archive_dir=ARCHIVE_RE
     print(f"✅ Successfully archived {archived_count}/{len(mp3_files)} MP3 file(s).")
     return archived_count
 
-def delete_remote_transcript(api_key, transcript_id, state=None, archive_audio=True):
-    """Delete a transcript from Fireflies.ai cloud and move local recording to pCloud archive."""
-    print(f"  🗑️ Deleting transcript {transcript_id} from Fireflies.ai cloud...")
+def _transcript_mp3_name(t_data):
+    """Same filename process_transcript() uses for a transcript's recording."""
+    raw_date = t_data.get("date")
+    if isinstance(raw_date, (int, float)) or (isinstance(raw_date, str) and raw_date.isdigit()):
+        dt = datetime.fromtimestamp(float(raw_date) / 1000.0, tz=timezone.utc)
+        date_str = dt.strftime("%Y-%m-%d")
+    elif isinstance(raw_date, str) and len(raw_date) >= 10:
+        date_str = raw_date[:10]
+    else:
+        date_str = datetime.now().strftime("%Y-%m-%d")
+    return f"{date_str}-{slugify(t_data.get('title', 'Untitled Session'))}.mp3"
+
+def archive_and_verify(local_mp3, archive_dir=ARCHIVE_RECORDINGS_DIR):
+    """Copy local_mp3 into the pCloud archive and confirm it is really there.
+
+    Returns the archived Path only if the destination exists with the same,
+    non-zero size as the source; otherwise None. The local file is left in
+    place (the caller removes it only after the cloud delete succeeds).
+    """
+    src = Path(local_mp3)
+    if not src.exists() or src.stat().st_size == 0:
+        print(f"  ❌ Local recording missing or empty: {src}")
+        return None
+    # Never mkdir the pCloud tree: if the drive is unmounted that would create a
+    # stray local folder and the "archive" would silently be wrong.
+    if not archive_dir.parent.is_dir():
+        print(f"  ❌ pCloud archive location not available: {archive_dir.parent}")
+        return None
+    try:
+        archive_dir.mkdir(exist_ok=True)
+        dest = archive_dir / src.name
+        shutil.copy2(str(src), str(dest))
+    except Exception as e:
+        print(f"  ❌ Failed to copy {src.name} to {archive_dir}: {e}")
+        return None
+    if not dest.is_file() or dest.stat().st_size != src.stat().st_size:
+        print(f"  ❌ Archive verification failed for {dest} (missing or size mismatch)")
+        return None
+    print(f"  📦 Archived and verified in pCloud: {dest} ({dest.stat().st_size} bytes)")
+    return dest
+
+def delete_remote_transcript(api_key, transcript_id, state=None):
+    """Archive the recording to pCloud, verify it, and only then delete from Fireflies.
+
+    Order is fixed: (1) get the MP3 locally (download if needed), (2) copy to
+    pCloud and verify it is there, (3) delete the cloud transcript, (4) remove
+    the local MP3. Any failure before step 3 aborts without deleting anything.
+    """
+    print(f"  🔎 Preparing to delete transcript {transcript_id} (archive-first)...")
+    data = graphql_query(api_key, FETCH_SINGLE_TRANSCRIPT_QUERY, {"transcriptId": transcript_id})
+    t_data = data.get("transcript")
+    if not t_data:
+        print(f"  ❌ Transcript {transcript_id} not found on Fireflies; nothing deleted.")
+        return False
+
+    mp3_name = _transcript_mp3_name(t_data)
+    local_mp3 = RECORDINGS_DIR / mp3_name
+    if not local_mp3.exists() or local_mp3.stat().st_size == 0:
+        audio_url = t_data.get("audio_url")
+        if not audio_url:
+            print("  ❌ No local MP3 and Fireflies has no audio_url; cannot archive, NOT deleting.")
+            return False
+        RECORDINGS_DIR.mkdir(parents=True, exist_ok=True)
+        print(f"  ⬇️ Downloading recording to {local_mp3.relative_to(BASE_DIR)} ...")
+        if not download_audio_file(audio_url, local_mp3):
+            print("  ❌ Audio download failed; NOT deleting.")
+            return False
+
+    archived = archive_and_verify(local_mp3)
+    if not archived:
+        print("  ❌ Archive not confirmed in pCloud; NOT deleting from Fireflies.")
+        return False
+
     res = graphql_query(api_key, DELETE_TRANSCRIPT_MUTATION, {"id": transcript_id})
     deleted = res.get("deleteTranscript")
-    if deleted:
-        print(f"  ✅ Successfully deleted '{deleted.get('title')}' (ID: {deleted.get('id')}) from Fireflies.ai.")
-        if archive_audio:
-            archived = False
-            # Check if recorded in sync state
-            if state and "processed" in state and transcript_id in state["processed"]:
-                mp3_file = state["processed"][transcript_id].get("mp3_file")
-                if mp3_file and archive_mp3_file(mp3_file):
-                    state["processed"][transcript_id]["archived_mp3"] = str(ARCHIVE_RECORDINGS_DIR / Path(mp3_file).name)
-                    archived = True
+    if not deleted:
+        print("  ❌ Fireflies delete call returned nothing; local MP3 kept for retry.")
+        return False
+    print(f"  ✅ Successfully deleted '{deleted.get('title')}' (ID: {deleted.get('id')}) from Fireflies.ai.")
 
-            # If not yet archived, search in recordings directory by slugified title or ID
-            if not archived and RECORDINGS_DIR.exists():
-                title_slug = slugify(deleted.get("title", ""))
-                for p in RECORDINGS_DIR.glob("*.mp3"):
-                    if title_slug in p.name:
-                        archive_mp3_file(p)
-                        break
-        return True
-    return False
+    try:
+        local_mp3.unlink()
+    except OSError as e:
+        print(f"  ⚠️ Could not remove local copy {local_mp3}: {e}")
+    if state is not None and transcript_id in state.get("processed", {}):
+        state["processed"][transcript_id]["archived_mp3"] = str(archived)
+    return True
 
 
 def load_sync_state():
@@ -407,9 +469,8 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="List available transcripts without downloading")
     parser.add_argument("--all-titles", action="store_true", help="Fetch all meeting titles (skip trading session title filter)")
     parser.add_argument("--delete-from-fireflies", action="store_true", help="Delete transcript from Fireflies cloud after successful local download")
-    parser.add_argument("--delete-id", help="Delete a specific transcript from Fireflies.ai cloud by ID directly")
+    parser.add_argument("--delete-id", help="Archive the recording to pCloud, verify it, then delete this transcript from Fireflies.ai (aborts without deleting if the archive is not confirmed)")
     parser.add_argument("--archive-all", action="store_true", help="Move all MP3 files from raw/recordings/ to pCloud archive")
-    parser.add_argument("--no-archive", action="store_true", help="Skip moving local MP3 file to pCloud archive after cloud deletion")
 
     args = parser.parse_args()
 
@@ -429,9 +490,9 @@ def main():
     state = load_sync_state()
 
     if args.delete_id:
-        delete_remote_transcript(api_key, args.delete_id, state=state, archive_audio=not args.no_archive)
+        ok = delete_remote_transcript(api_key, args.delete_id, state=state)
         save_sync_state(state)
-        return
+        sys.exit(0 if ok else 1)
 
     try:
         if args.id:
@@ -486,7 +547,7 @@ def main():
 
             # Delete from Fireflies cloud if requested
             if args.delete_from_fireflies:
-                delete_remote_transcript(api_key, t_id, state=state, archive_audio=not args.no_archive)
+                delete_remote_transcript(api_key, t_id, state=state)
 
         save_sync_state(state)
         print(f"\n✅ Sync complete. Processed {processed_count} new transcript(s).")
