@@ -475,10 +475,46 @@ def parse_tat_report(date):
     return {"date": date, "title": title, "path": str(path.relative_to(WIKI)), "runs": runs}
 
 
-WATCHLIST_HDR_RE = re.compile(r"^## .*My-Watchlist 4H Chart Screenshots.*$", re.M)
+# the runs have written this as both "## …" and "### … — HH:MM SGT" (from 2026-10-11)
+WATCHLIST_HDR_RE = re.compile(r"^(#{2,4}) .*My-Watchlist 4H Chart Screenshots.*$", re.M)
+
+
+MYWL_DIR = WIKI / "reports" / "my_watchlist"
+
+
+def _mywl_file_gallery():
+    """Last '## 🕒 [HH:MM SGT]' run in the newest wiki/reports/my_watchlist/YYMMDD-my_watchlist.md.
+
+    This is where the Orca TAT automations actually file the sweep (one file per day, runs appended).
+    """
+    for path in sorted(MYWL_DIR.glob("[0-9][0-9][0-9][0-9][0-9][0-9]-my_watchlist.md"), reverse=True):
+        md = read(path)
+        marks = list(re.finditer(r"^## 🕒 \[(\d{1,2}:\d{2}) SGT\].*$", md, re.M))
+        if not marks:
+            continue
+        last = marks[-1]
+        nxt = re.search(r"^#{1,2} ", md[last.end():], re.M)
+        body = md[last.end(): last.end() + nxt.start()] if nxt else md[last.end():]
+        entries = [{"sym": m.group(1).upper(), "img": os.path.basename(m.group(2))}
+                   for m in re.finditer(r"!\[(\w+)[^\]]*\]\(([^)]+)\)", body)]
+        if entries:
+            return {"date": "20%s-%s-%s" % (path.name[:2], path.name[2:4], path.name[4:6]), "time": last.group(1),
+                    "path": str(path.relative_to(WIKI)), "entries": entries}
+    return None
 
 
 def my_watchlist_gallery():
+    """Newest My-Watchlist 4H sweep: the dedicated my_watchlist/ files, or a TAT report section, whichever is later."""
+    tat = _tat_watchlist_gallery()
+    own = _mywl_file_gallery()
+    if not own:
+        return tat
+    if not tat["date"]:
+        return own
+    return max(own, tat, key=lambda g: (g["date"], (g["time"] or "").zfill(5)))
+
+
+def _tat_watchlist_gallery():
     """Latest 'My-Watchlist 4H Chart Screenshots' section across TAT reports.
 
     scripts/capture_watchlist_charts.py emits one such section per scheduled 4H
@@ -495,9 +531,11 @@ def my_watchlist_gallery():
         if not marks:
             continue
         last = marks[-1]
-        nxt = re.search(r"^## ", md[last.end():], re.M)
+        # section ends at the next heading of the same or a higher level
+        nxt = re.search(r"^#{1,%d} " % len(last.group(1)), md[last.end():], re.M)
         body = md[last.end(): last.end() + nxt.start()] if nxt else md[last.end():]
-        times = re.findall(r"\[(\d{1,2}:\d{2}) SGT\]", md[:last.start()])
+        own = re.search(r"(\d{1,2}:\d{2}) SGT", last.group(0))
+        times = [own.group(1)] if own else re.findall(r"\[(\d{1,2}:\d{2}) SGT\]", md[:last.start()])
         entries = [{"sym": m.group(1).upper(), "img": os.path.basename(m.group(2))}
                    for m in re.finditer(r"!\[(\w+)[^\]]*\]\(([^)]+)\)", body)]
         return {"date": date, "time": times[-1] if times else None,
@@ -527,8 +565,8 @@ def parse_daily_signals_report(date):
 # ---------------------------------------------------------------- AHH session notes
 
 SESSION_TYPES = [("ahh-access-time", "AHH Access Time"), ("ahh-session", "AHH Session"),
-                 ("taw-pro", "TAW Pro"), ("tat-pro", "TAT Pro"), ("weekly-review", "Weekly Review"),
-                 ("tar-session", "TAR Session")]
+                 ("taw-pro", "TAW Pro"), ("weekly-review", "Weekly Review"),
+                 ("tar-session", "TAR Session"), ("3tt", "3TT")]
 # Section headings that hold per-instrument trade ideas, across every layout the notes have used
 IDEA_SECTIONS = ("opportunit", "instrument", "claims", "forex pairs", "commodities", "indices", "stocks")
 
@@ -827,7 +865,7 @@ def parse_cb_tally():
 # ---------------------------------------------------------------- live alert sheet
 
 SHEET_TABS = [  # (key in fetch_google_sheet.GIDS, dashboard source id, label)
-    ("H1", "1H", "1H"), ("4H", "4H", "4H"), ("DAILY", "D", "Daily FX"),
+    ("H1", "1H", "1H"), ("4H", "4H", "4H"), ("DAILY", "D", "Daily"),
     ("BATS", "BATS", "TV Stocks (bats)"), ("BULL", "YBULL", "Yahoo Bull D"), ("BEAR", "YBEAR", "Yahoo Bear D"),
 ]
 SHEET_TTL = 300

@@ -4,18 +4,24 @@
     .venv/bin/python3 dashboard/server.py            # http://127.0.0.1:8787
     .venv/bin/python3 dashboard/server.py --port 9000
 
-Read-only: nothing here writes to wiki/ or raw/. Binds to localhost by default.
+Read-only except the trade journal form: POST /api/journal/{new,comment,close} runs scripts/journal.py
+(the journal's only writer). Nothing else here writes to wiki/ or raw/. Binds to localhost by default.
 """
 import argparse
 import gzip
 import json
 import mimetypes
+import subprocess
+import sys
 import threading
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
+import fedwatch as FED
+import news as NEWS
+import statements as ST
 import wiki_data as W
 
 STATIC = Path(__file__).resolve().parent / "static"
@@ -94,6 +100,61 @@ def api_images(q):
     return sorted(found, key=lambda i: i["at"], reverse=True)[:40]
 
 
+# ---------------------------------------------------------------- journal form (writes)
+
+JOURNAL_PY = W.ROOT / "scripts" / "journal.py"
+
+
+def journal_meta(q):
+    if str(W.ROOT) not in sys.path:
+        sys.path.insert(0, str(W.ROOT))
+    from scripts import journal as J
+    return {"emotions": J.EMOTIONS, "sources": J.SOURCES, "mistakes": J.MISTAKES, "checklist": J.CHECKLIST}
+
+
+def _flags(d, spec):
+    """spec: [(json key, cli flag)] → argv pairs for the values that were filled in."""
+    out = []
+    for key, flag in spec:
+        v = d.get(key)
+        if isinstance(v, list):
+            v = ",".join(str(x) for x in v)
+        if v not in (None, ""):
+            out += [flag, str(v)]
+    return out
+
+
+def journal_argv(cmd, d):
+    if cmd == "new":
+        return ["new", str(d.get("symbol", "")), str(d.get("direction", "")), "--no-prompt"] + _flags(d, [
+            ("entry", "--entry"), ("stop", "--stop"), ("target", "--target"), ("size", "--size"), ("risk", "--risk"),
+            ("tf", "--tf"), ("setup", "--setup"), ("source", "--source"), ("planned", "--planned"), ("fomo", "--fomo"),
+            ("confidence", "--confidence"), ("emotion", "--emotion"), ("rules", "--rules"), ("why", "--why"),
+            ("feel", "--feel"), ("checks", "--checks"), ("opened", "--opened")])
+    if cmd == "comment":
+        return ["comment", str(d.get("ref", "")), str(d.get("text", ""))] + _flags(d, [("at", "--at")])
+    if cmd == "close":
+        argv = ["close", str(d.get("ref", ""))] + _flags(d, [
+            ("exit", "--exit"), ("r", "--r"), ("pnl", "--pnl"), ("mistakes", "--mistakes"), ("rules", "--rules"),
+            ("note", "--note"), ("closed", "--closed")])
+        return argv + (["--cancel"] if d.get("cancel") else [])
+    return None
+
+
+def run_journal(cmd, d):
+    argv = journal_argv(cmd, d)
+    if argv is None:
+        return {"ok": False, "error": "unknown command"}, 404
+    # argv list, no shell; journal.py validates choices and exits non-zero with a message on bad input
+    p = subprocess.run([sys.executable, str(JOURNAL_PY)] + argv, cwd=str(W.ROOT), capture_output=True,
+                       text=True, timeout=120, stdin=subprocess.DEVNULL)
+    msg = (p.stdout.strip() or p.stderr.strip()).splitlines()
+    if p.returncode:
+        err = p.stderr.strip().splitlines()
+        return {"ok": False, "error": (err[-1] if err else "journal.py exited %d" % p.returncode)}, 400
+    return {"ok": True, "message": msg[0] if msg else "saved"}, 200
+
+
 ROUTES = {
     "/api/meta": api_meta,
     "/api/signals": api_signals,
@@ -108,8 +169,13 @@ ROUTES = {
     "/api/sentiment": lambda q: W.latest_sentiment(q.get("date")),
     "/api/images": api_images,
     "/api/journal": lambda q: W.all_journal(),
+    "/api/journal-meta": journal_meta,
     "/api/doc": api_doc,
+    "/api/fedwatch": lambda q: FED.fedwatch(refresh=q.get("refresh") == "1"),
+    "/api/news": lambda q: NEWS.news(refresh=q.get("refresh") == "1"),
     "/api/my-watchlist": lambda q: W.my_watchlist_gallery(),
+    "/api/performance": lambda q: ST.performance(account=q.get("account", "all"), since=q.get("since"),
+                                                 refresh=q.get("refresh") == "1"),
 }
 
 
@@ -141,6 +207,25 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             traceback.print_exc()
             self.send_json({"error": "%s: %s" % (type(e).__name__, e)}, 500)
+
+    def do_POST(self):
+        url = urlparse(self.path)
+        # a custom header can't be sent cross-origin without a CORS preflight, which this server never answers,
+        # so other sites open in the same browser can't post to the journal
+        if self.headers.get("X-Desk") != "1":
+            return self.send_json({"ok": False, "error": "forbidden"}, 403)
+        if not url.path.startswith("/api/journal/"):
+            return self.send_error(404)
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+            if n > 100_000:
+                return self.send_json({"ok": False, "error": "too large"}, 413)
+            data = json.loads(self.rfile.read(n) or b"{}")
+            res, status = run_journal(url.path[len("/api/journal/"):], data)
+            self.send_json(res, status)
+        except Exception as e:
+            traceback.print_exc()
+            self.send_json({"ok": False, "error": "%s: %s" % (type(e).__name__, e)}, 500)
 
     def send_json(self, data, status=200):
         body = json.dumps(data, ensure_ascii=False, default=str).encode("utf-8")

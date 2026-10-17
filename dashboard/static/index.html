@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0d0e10" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f3f3f0" media="(prefers-color-scheme: light)">
+  <meta name="apple-mobile-web-app-title" content="Trading Desk">
   <title>Trading Desk</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%23199e70'/%3E%3Cpath d='M3 11l3-4 3 2 4-5' stroke='white' stroke-width='1.6' fill='none'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/static/style.css">
@@ -11,29 +14,32 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="logo">▲</span> Trading Desk</div>
+    <div class="brand"><span class="logo">▲</span> <span class="name">TRADING TERMINAL</span></div>
     <nav class="nav" id="nav">
-      <a href="#desk" data-view="desk">Desk</a>
-      <a href="#signals" data-view="signals">TAT Signals</a>
-      <a href="#analysis" data-view="analysis">Analysis</a>
-      <a href="#calendar" data-view="calendar">Calendar</a>
-      <a href="#ahh" data-view="ahh">Session Ideas</a>
-      <a href="#brief" data-view="brief">Daily Brief</a>
-      <a href="#my-watchlist" data-view="my-watchlist">My Watchlist</a>
-      <a href="#journal" data-view="journal">Journal</a>
+      <a href="#desk" data-view="desk"><i>1</i>Desk</a>
+      <a href="#signals" data-view="signals"><i>2</i>Signals</a>
+      <a href="#analysis" data-view="analysis"><i>3</i>Analysis</a>
+      <a href="#calendar" data-view="calendar"><i>4</i>Calendar</a>
+      <a href="#ahh" data-view="ahh"><i>5</i>Sessions</a>
+      <a href="#brief" data-view="brief"><i>6</i>Brief</a>
+      <a href="#my-watchlist" data-view="my-watchlist"><i>7</i>Watchlist</a>
+      <a href="#journal" data-view="journal"><i>8</i>Journal</a>
+      <a href="#performance" data-view="performance"><i>9</i>Perf</a>
     </nav>
     <div class="search-wrap">
-      <span class="ico">⌕</span>
-      <input id="q" type="search" placeholder="Search symbol or text…" autocomplete="off" list="symlist" aria-label="Search">
+      <span class="ico">›</span>
+      <input id="q" type="search" placeholder="symbol or cmd" autocomplete="off" list="symlist" aria-label="Search">
       <kbd>/</kbd>
       <datalist id="symlist"></datalist>
     </div>
     <div class="status">
+      <span class="sessions" id="sessions" title="FX sessions open now"></span><span class="clock" id="clock"></span>
       <span class="dot" id="sheetDot"></span><span class="lbl" id="sheetLbl">Sheet…</span>
       <button class="iconbtn" id="refreshBtn" title="Re-pull alert sheet and reload wiki data">↻</button>
       <button class="iconbtn" id="themeBtn" title="Toggle light/dark">◐</button>
     </div>
   </header>
+  <div class="tape" id="tape" aria-label="Latest signals"></div>
 
   <main id="main">
     <section id="view-desk" class="view"></section>
@@ -44,6 +50,7 @@
     <section id="view-brief" class="view hidden"></section>
     <section id="view-my-watchlist" class="view hidden"></section>
     <section id="view-journal" class="view hidden"></section>
+    <section id="view-performance" class="view hidden"></section>
   </main>
 
   <div class="scrim" id="scrim"></div>
@@ -55,7 +62,7 @@
     <div class="mh"><span class="ttl" id="mTitle"></span><span style="margin-left:auto"></span><button class="iconbtn" id="mClose">✕</button></div>
     <div class="mb"><div class="md" id="mBody"></div></div>
   </div>
-  <div class="lightbox" id="lightbox"><img id="lbImg" alt=""><div class="cap" id="lbCap"></div></div>
+  <div class="lightbox" id="lightbox" role="dialog" aria-label="Chart viewer"><button class="lbclose" data-lbclose aria-label="Close">✕</button><button class="lbnav prev" data-lb="-1" aria-label="Previous image">‹</button><button class="lbnav next" data-lb="1" aria-label="Next image">›</button><div class="lbtrack" id="lbTrack"></div><div class="cap" id="lbCap"></div><div class="lbstrip" id="lbStrip" aria-label="Thumbnails"></div></div>
   <div class="tooltip" id="tooltip"></div>
 
   <script src="/static/charts.js"></script>

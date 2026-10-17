@@ -194,13 +194,47 @@ async function openDoc(path, title) {
   $('#modal .mb').scrollTop = 0;
 }
 
-function lightbox(src, cap) {
-  $('#lbImg').src = src; $('#lbCap').textContent = cap || '';
+let lbGroup = [], lbIdx = 0, lbAuto = null, lbAutoT = null;
+// Lightbox: a horizontal scroll-snap track (one slide per chart) plus a thumbnail strip.
+// Scrolling the track (swipe, trackpad, wheel, drag) or tapping a thumbnail moves between charts.
+function lightbox(src, cap, group, idx) {
+  lbGroup = group || [{ full: src, cap }]; lbIdx = idx || 0;
+  const multi = lbGroup.length > 1;
+  $('#lightbox').classList.toggle('multi', multi);
+  $('#lbTrack').replaceChildren(...lbGroup.map((it, i) => h('div', { class: 'lbslide' },
+    h('img', { src: it.full, alt: it.cap || '', loading: Math.abs(i - lbIdx) <= 1 ? 'eager' : 'lazy', draggable: 'false' }))));
+  $('#lbStrip').replaceChildren(...(multi ? lbGroup.map((it, i) => h('button', { class: 'lbthumb', type: 'button', title: it.cap || '', dataset: { lbto: i } },
+    h('img', { src: it.thumb || it.full, alt: '', loading: 'lazy', draggable: 'false' }),
+    h('span', null, (it.cap || '').split(' · ')[0]))) : []));
   $('#lightbox').classList.add('show');
+  lbGo(lbIdx, false);
+}
+function lbGo(i, smooth = true) {
+  if (!lbGroup.length) return;
+  const to = Math.max(0, Math.min(lbGroup.length - 1, i));
+  if (Math.abs(to - lbIdx) > 2) smooth = false;   // long jumps (thumbnail taps) snap; neighbours glide
+  lbIdx = to;
+  const tr = $('#lbTrack');
+  lbAuto = smooth ? lbIdx : null;   // a programmatic smooth scroll is in flight: don't re-sync mid-way
+  clearTimeout(lbAutoT); lbAutoT = setTimeout(() => { lbAuto = null; }, 1200);
+  tr.scrollTo({ left: lbIdx * tr.clientWidth, behavior: smooth ? 'smooth' : 'instant' });
+  lbShow();
+}
+function lbShow() {
+  const it = lbGroup[lbIdx];
+  $('#lbCap').textContent = (it.cap || '') + (lbGroup.length > 1 ? `  (${lbIdx + 1}/${lbGroup.length})` : '');
+  const strip = $('#lbStrip');
+  strip.querySelectorAll('.lbthumb').forEach((b, i) => b.classList.toggle('on', i === lbIdx));
+  const on = strip.children[lbIdx];
+  if (on) strip.scrollTo({ left: on.offsetLeft - (strip.clientWidth - on.offsetWidth) / 2, behavior: 'smooth' });
+}
+function lbStep(d) {
+  if (lbGroup.length < 2) return;
+  lbGo((lbIdx + d + lbGroup.length) % lbGroup.length);
 }
 
 // ============================================================ shared computations
-const TF_SRC = { '1H': '1H', '4H': '4H', 'D': 'Daily FX', 'BATS': 'TV Stocks', 'YBULL': 'Yahoo Bull', 'YBEAR': 'Yahoo Bear' };
+const TF_SRC = { '1H': '1H', '4H': '4H', 'D': 'Daily', 'BATS': 'TV Stocks', 'YBULL': 'Yahoo Bull', 'YBEAR': 'Yahoo Bear' };
 const SERIES_BULL = { key: 'bull', name: '▲ Bull', color: 'var(--bull)' };
 const SERIES_BEAR = { key: 'bear', name: '▼ Bear', color: 'var(--bear)' };
 const SERIES_NEU = { key: 'neutral', name: '● Neutral / watch', color: 'var(--neutral)' };
@@ -241,8 +275,8 @@ function alignment(state) {
 
 // ============================================================ views: DESK
 async function viewDesk(root) {
-  const [brief, hist, cal, cb, tat, ahh] = await Promise.all([
-    api('/api/brief'), api('/api/strength-history'), api('/api/calendar'), api('/api/cb'), api('/api/tat-latest'), api('/api/ahh'),
+  const [brief, hist, cal, cb, tat, ahh, news] = await Promise.all([
+    api('/api/brief'), api('/api/strength-history'), api('/api/calendar'), api('/api/cb'), api('/api/tat-latest'), api('/api/ahh'), api('/api/news'),
   ]);
   const q = S.q, rows = sigRows(), today = sgtToday();
   const tfRows = rows.filter(r => ['1H', '4H', 'D'].includes(r.src));
@@ -278,10 +312,13 @@ async function viewDesk(root) {
     ),
   );
 
+  const dg = h('div', { class: 'desk-grid' }); root.appendChild(dg);
+  const put = (el, span) => { el.classList.add(span); dg.appendChild(el); return el; };
+  const nCard = put(newsCard(news), 'span-7'); nCard.classList.add('scroll');
+
   // currency strength + trend
   const csCard = card('Currency strength', brief ? `Daily brief ${brief.date}` : '');
   const trendCard = card('Strength trend', hist ? `${Math.min(hist.length, 25)} briefs` : '');
-  root.appendChild(h('div', { class: 'grid g2' }, csCard, trendCard));
   const csBox = h('div'); csCard.appendChild(csBox);
   Charts.diverging(csBox, scores.map(s => ({ label: s.ccy, value: s.score, tip: s.bias })), {
     aria: 'Currency strength scores', onClick: d => { setQuery(d.label); go('signals'); },
@@ -307,7 +344,6 @@ async function viewDesk(root) {
   const setups = ((tat && tat.setups) || []).filter(s => matches(q, s.syms, s.title, s.text, s.detail));
   const setCard = card('Latest TAT setups', tat ? h('a', { onclick: () => go('analysis') , style: { cursor: 'pointer' } }, `${tat.date} · ${tat.time} SGT →`) : '');
   setCard.appendChild(setups.length ? h('div', { class: 'list', style: { maxHeight: '300px', overflowY: 'auto' } }, setups.map(setupLi)) : empty('No setups in latest run'));
-  root.appendChild(h('div', { class: 'grid g-wide mt' }, flowCard, setCard));
 
   // events, pairs/drhr, ahh
   const upcoming = ((cal && cal.events) || []).filter(e => e.impact !== 'Low' && evTime(e) > now - 3600e3 && evTime(e) < now + 3 * 864e5)
@@ -339,9 +375,41 @@ async function viewDesk(root) {
   aCard.appendChild(ideas.length ? h('div', { class: 'list' }, ideas.slice(0, 8).map(i => h('div', { class: 'li' }, h('div', { class: 'body' },
     h('div', { class: 't' }, i.syms.slice(0, 3).map(s => symChip(s, i.dir)), dirBadge(i.dir)),
     h('div', { class: 'd' }, i.direction), i.levels ? h('div', { class: 'm' }, 'Levels: ' + i.levels) : null)))) : empty('No ideas match'));
-  root.appendChild(h('div', { class: 'grid g3 mt' }, evCard, pCard, aCard));
 
-  if (cb && cb.stances.length) root.appendChild(h('div', { class: 'mt' }, cbCard(cb)));
+  evCard.classList.add('scroll'); setCard.classList.add('scroll');
+  put(evCard, 'span-5');
+  put(csCard, 'span-4'); put(trendCard, 'span-4'); put(flowCard, 'span-4');
+  put(setCard, 'span-4'); put(pCard, 'span-4'); put(aCard, 'span-4');
+  if (cb && cb.stances.length) put(cbCard(cb), 'span-12');
+}
+
+function newsCard(news) {
+  const fd = F('news', { range: 7, all: false, tab: 'watch' });
+  const names = (news && news.names) || {};
+  const bare = sym => sym.replace(/\.[A-Z]+$/, '');
+  const ago = ms => ms < 3600e3 ? `${Math.max(1, Math.round(ms / 60000))}m ago` : ms < 86400e3 ? `${Math.round(ms / 3600e3)}h ago` : `${Math.round(ms / 86400e3)}d ago`;
+  const now = Date.now(), mkt = fd.tab === 'market';
+  const src = (mkt ? news && news.market : news && news.items) || [];
+  const all = src.filter(i => now - i.ts * 1000 < fd.range * 864e5 &&
+    (mkt ? matches(S.q, i.title, i.topics) : matches(S.q, i.title, i.syms, i.syms.map(x => names[x]))));
+  const shown = fd.all ? all : all.slice(0, 20);
+  const right = h('span', { style: { display: 'inline-flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' } },
+    seg([{ v: 'watch', label: 'Watchlist' }, { v: 'market', label: 'Latest' }], fd.tab, v => { fd.tab = v; fd.all = false; saveFilters(); render(); }),
+    seg([{ v: 1, label: '24h' }, { v: 3, label: '3d' }, { v: 7, label: '7d' }, { v: 30, label: '30d' }].filter(o => !mkt || o.v <= 7), Math.min(fd.range, mkt ? 7 : 30), v => { fd.range = v; saveFilters(); render(); }),
+    news && news.fetchedAt ? h('span', { class: 'small muted' }, `moomoo · ${news.fetchedAt.slice(5, 16).replace('T', ' ')} SGT`) : null);
+  const c = card(mkt ? 'Latest market news' : 'Watchlist news', right);
+  if (!news || !news.items) { c.appendChild(empty('News unavailable — moomoo could not be reached')); return c; }
+  if (news.error) c.appendChild(h('div', { class: 'small muted' }, `Showing last good pull — refresh failed: ${news.error}`));
+  c.appendChild(shown.length ? h('div', { class: 'list' }, shown.map(i => h('div', { class: 'li' }, h('div', { class: 'body' },
+    mkt ? h('div', { class: 't' }, (i.topics || []).slice(0, 3).map(x => h('span', { class: 'tag' }, x)))
+        : h('div', { class: 't' }, i.syms.slice(0, 3).map(x => symChip(bare(x))), h('span', { class: 'tag' }, i.syms.map(x => names[x] || x).slice(0, 2).join(' · '))),
+    h('div', { class: 'd' }, h('a', { href: i.url, target: '_blank', rel: 'noopener noreferrer' }, i.title)),
+    h('div', { class: 'm' }, `${ago(now - i.ts * 1000)} · ${i.time} SGT · ${i.source}`)))))
+    : empty(`No headlines in the last ${fd.range === 1 ? '24h' : fd.range + 'd'}`));
+  if (all.length > 20) c.appendChild(h('a', { class: 'small', style: { cursor: 'pointer', display: 'inline-block', marginTop: '8px' },
+    onclick: () => { fd.all = !fd.all; saveFilters(); render(); } }, fd.all ? 'Show fewer' : `Show all ${all.length}`));
+  c.appendChild(h('div', { class: 'small muted', style: { marginTop: '8px' } }, 'Compiled from public information; not investment advice.'));
+  return c;
 }
 
 function setupLi(s) {
@@ -352,6 +420,36 @@ function setupLi(s) {
     s.title ? h('div', { class: 'd' }, s.title) : null,
     (s.text || s.detail.length) ? detail : null,
     (s.text || s.detail.length) ? h('a', { class: 'small', style: { cursor: 'pointer' }, onclick: e => { detail.classList.toggle('open'); e.target.textContent = detail.classList.contains('open') ? 'Less' : 'More'; } }, 'More') : null));
+}
+
+function fedCard(fw) {
+  const c = card('Fed rate odds', fw && fw.fetchedAt ? `moomoo FedWatch · ${fw.fetchedAt.slice(5, 16).replace('T', ' ')} SGT` : '');
+  if (!fw || !fw.meetings || !fw.meetings.length) {
+    c.appendChild(empty(fw && fw.error ? `FedWatch unavailable — ${fw.error}` : 'FedWatch unavailable — is moomoo OpenD running?'));
+    return c;
+  }
+  if (fw.error) c.appendChild(h('div', { class: 'small muted' }, `Showing last good pull — refresh failed: ${fw.error}`));
+  const next = fw.meetings[0];
+  c.appendChild(h('div', { style: { margin: '2px 10px 8px' } },
+    h('span', { class: 'small muted' }, `Next FOMC ${next.date} · vs current ${fw.base}${fw.baseInferred ? ' (inferred)' : ''}`), h('br'),
+    h('span', { style: { fontSize: '20px', fontWeight: 700, color: next.hike >= 50 ? 'var(--hawk)' : 'var(--text)' } }, `${next.hike.toFixed(1)}%`),
+    h('span', { class: 'small muted' }, ' hike · '), h('b', null, `${next.hold.toFixed(1)}%`), h('span', { class: 'small muted' }, ' hold'),
+    next.cut ? h('span', { class: 'small muted' }, ` · ${next.cut.toFixed(1)}% cut`) : null));
+  const bar = pct => ({ width: `${pct}%` });
+  c.appendChild(h('div', null, fw.meetings.slice(0, 8).map(m => h('div', { class: 'hbar', style: { gridTemplateColumns: '64px 1fr 122px' },
+    title: m.ranges.map(r => `${r.range}: ${r.p}%`).join('\n') },
+    h('span', { class: 'small' }, m.date.slice(2)),
+    h('div', { class: 'bars', style: { background: 'var(--surface-3)' } },
+      m.cut ? h('i', { style: { ...bar(m.cut), background: 'var(--dove)' } }) : null,
+      m.hold ? h('i', { style: { ...bar(m.hold), background: 'var(--neutral)' } }) : null,
+      m.hike ? h('i', { style: { ...bar(m.hike), background: 'var(--hawk)' } }) : null),
+    h('span', { class: 'num small', style: { whiteSpace: 'nowrap' } }, `${m.hike.toFixed(0)}% hike · ${m.move_bp >= 0 ? '+' : ''}${m.move_bp}bp`)))));
+  c.appendChild(h('div', { class: 'legend' },
+    h('span', { class: 'k' }, h('i', { class: 'sw', style: { background: 'var(--neutral)' } }), 'Hold'),
+    h('span', { class: 'k' }, h('i', { class: 'sw', style: { background: 'var(--hawk)' } }), 'Hike'),
+    h('span', { class: 'k' }, h('i', { class: 'sw', style: { background: 'var(--dove)' } }), 'Cut')));
+  c.appendChild(h('div', { class: 'small muted', style: { marginTop: '6px' } }, 'Market-implied probability of any hike by that meeting, and expected cumulative move vs the current range. Hover a row for the range split.'));
+  return c;
 }
 
 function cbCard(cb) {
@@ -549,7 +647,7 @@ const actualCell = (val, src) => h('b', { title: src ? `Filled from ${src} after
   src ? h('sup', { class: 'muted', style: { fontWeight: 400, marginLeft: '3px' } }, 'TV') : null);
 let cdTimer = null;
 async function viewCalendar(root) {
-  const [cal, cb] = await Promise.all([api('/api/calendar'), api('/api/cb')]);
+  const [cal, cb, fw] = await Promise.all([api('/api/calendar'), api('/api/cb'), api('/api/fedwatch')]);
   const f = F('calendar', { range: 'week', impacts: ['High', 'Medium'], ccy: 'all', hidePast: false });
   f.impacts = asSet(f.impacts);
   const today = sgtToday(), now = Date.now();
@@ -600,6 +698,7 @@ async function viewCalendar(root) {
   const side = h('div', { class: 'grid' });
   if (cb) {
     side.appendChild(cbCard(cb));
+    side.appendChild(fedCard(fw));
     const ahead = cb.stances.filter(s => s.next && s.next.when).map(s => ({ ...s, d: (s.next.when.match(/\d{4}-\d{2}-\d{2}/) || [''])[0] }))
       .filter(s => s.d && s.d >= today).sort((a, b) => a.d.localeCompare(b.d));
     side.appendChild(card('Rate decisions ahead', null, ahead.length ? h('div', { class: 'list' }, ahead.map(s => h('div', { class: 'li' }, h('div', { class: 'body' },
@@ -625,7 +724,7 @@ async function viewAhh(root) {
   // `hidden` (not an allow-list) so a session type added later shows up without resetting saved filters
   const f = F('ahh', { range: '30d', hidden: [], dir: 'all', mode: 'ideas', sym: null });
   delete f.sessions;
-  const TYPES = ['Weekly Review', 'TAR Session', 'AHH Access Time', 'AHH Session', 'TAW Pro', 'TAT Pro'].filter(t => notes.some(n => n.session === t));
+  const TYPES = ['Weekly Review', 'TAR Session', 'AHH Access Time', 'AHH Session', 'TAW Pro', '3TT'].filter(t => notes.some(n => n.session === t));
   const hidden = asSet(f.hidden, []);
   const shownTypes = new Set(TYPES.filter(t => !hidden.has(t)));
   const today = sgtToday();
@@ -638,7 +737,7 @@ async function viewAhh(root) {
   const ideas = allIdeas.filter(ideaOk);
 
   root.replaceChildren(
-    h('div', { class: 'view-head' }, h('h1', null, 'Session Ideas'), h('span', { class: 'sub' }, 'Suggested trades from Weekly Review, TAR Session, AHH Access Time, AHH Session and TAW Pro notes')),
+    h('div', { class: 'view-head' }, h('h1', null, 'Session Ideas'), h('span', { class: 'sub' }, 'Suggested trades from Weekly Review, TAR Session, AHH Access Time, AHH Session, TAW Pro and 3TT notes')),
     h('div', { class: 'filters' },
       seg([{ v: 'ideas', label: 'Trade ideas' }, { v: 'rules', label: 'Trading rules' }], f.mode, v => upd(() => { f.mode = v; })()),
       h('span', { class: 'flabel' }, 'Range'),
@@ -710,6 +809,8 @@ async function viewAhh(root) {
 async function viewBrief(root) {
   const dates = (S.meta && S.meta.briefs) || [];
   const f = F('brief', { date: null, wdir: 'all', wcls: 'all', wsig: false });
+  // Default to the newest brief (today's) on each page load; a date picked later in the session sticks until reload.
+  if (!viewBrief.started) { viewBrief.started = true; f.date = dates[0]; }
   if (!f.date || !dates.includes(f.date)) f.date = dates[0];
   const [b, sent] = await Promise.all([api('/api/brief?date=' + f.date), api('/api/sentiment?date=' + f.date)]);
   const idx = dates.indexOf(f.date);
@@ -844,7 +945,11 @@ async function openSymbol(sym) {
 
   // current state per timeframe
   const st = latestBySymbol(rows)[sym] || {};
-  const tfs = cls === 'Stock' ? ['BATS', 'YBULL', 'YBEAR'] : ['D', '4H', '1H'];
+  const tfs = (cls === 'Stock' ? ['BATS', 'YBULL', 'YBEAR'] : ['D', '4H', '1H'])
+    .sort((x, y) => {  // newest signal on the left; timeframes with no signal last
+      const kx = st[x] ? `${st[x].date} ${st[x].time}` : '', ky = st[y] ? `${st[y].date} ${st[y].time}` : '';
+      return ky.localeCompare(kx);
+    });
   const tfMap = { 'D': 'D', '4H': '240', '1H': '60' };
   out.push(h('div', { class: 'statebox' }, tfs.map(k => {
     const r = st[k];
@@ -963,6 +1068,95 @@ function rBreakdown(title, groups, note) {
 }
 const fomoBucket = t => t.fomo === null || t.fomo === undefined ? 'unrated' : t.fomo <= 1 ? '0–1 low' : t.fomo < 3 ? '2 some' : '3+ high';
 
+// ---------- journal form: writes go through POST /api/journal/* → scripts/journal.py (the journal's only writer)
+const sgtNow = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Singapore', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date());
+const TIME_RE = '\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}';
+const fld = (label, input, opts = {}) => h('label', { class: `fld ${opts.wide ? 'wide' : ''}` }, h('span', { class: 'fl' }, label, opts.req ? h('b', { class: 'req' }, ' *') : null), input, opts.hint ? h('small', { class: 'muted' }, opts.hint) : null);
+const inp = (name, attrs = {}) => h('input', { name, class: 'txt', autocomplete: 'off', ...attrs });
+const num = (name, attrs = {}) => inp(name, { type: 'text', inputmode: 'decimal', pattern: '-?[0-9]*\\.?[0-9]*', ...attrs });
+const sel = (name, opts, attrs = {}) => h('select', { name, ...attrs }, h('option', { value: '' }, '—'), opts.map(o => Array.isArray(o) ? h('option', { value: o[0] }, o[1]) : h('option', { value: o }, o)));
+const area = (name, ph, attrs = {}) => h('textarea', { name, class: 'txt', rows: 3, placeholder: ph, ...attrs });
+const pills = (name, opts, type = 'checkbox') => h('div', { class: 'pills' }, opts.map(o => h('label', { class: 'pill' }, h('input', { type, name, value: Array.isArray(o) ? o[0] : o }), h('span', null, Array.isArray(o) ? o[1] : o))));
+
+function formData(form) {
+  const fd = new FormData(form), out = {};
+  for (const k of new Set(fd.keys())) {
+    const v = fd.getAll(k).map(x => String(x).trim()).filter(Boolean);
+    if (v.length) out[k] = form.querySelector(`[name="${k}"]`).type === 'checkbox' ? v : v[0];
+  }
+  return out;
+}
+
+function openJournalForm(title, fields, cmd, extra = {}) {
+  const err = h('div', { class: 'ferr', role: 'alert' });
+  const save = h('button', { class: 'btn primary', type: 'submit' }, 'Save to journal');
+  const form = h('form', { class: 'jform', novalidate: false }, fields, err,
+    h('div', { class: 'factions' }, h('button', { class: 'btn', type: 'button', onclick: closeOverlays }, 'Cancel'), save));
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const data = { ...extra, ...formData(form) };
+    save.disabled = true; save.textContent = 'Saving…'; err.textContent = '';
+    const res = await fetch('/api/journal/' + cmd, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Desk': '1' }, body: JSON.stringify(data) })
+      .then(r => r.json()).catch(() => ({ ok: false, error: 'Server unreachable' }));
+    save.disabled = false; save.textContent = 'Save to journal';
+    if (!res.ok) { err.textContent = res.error || 'Save failed'; return; }
+    closeOverlays(); delete cache['/api/journal']; toast(res.message || 'Saved'); render();
+  });
+  $('#mTitle').textContent = title;
+  $('#mBody').replaceWith(h('div', { id: 'mBody', class: 'md' }, form));
+  $('#modal').classList.add('show'); $('#scrim').classList.add('show');
+  $('#modal .mb').scrollTop = 0;
+}
+
+async function newTradeForm() {
+  const m = await api('/api/journal-meta');
+  if (!m) { toast('Journal options unavailable'); return; }
+  openJournalForm('Log a trade', [
+    h('div', { class: 'fgrid' },
+      fld('Symbol', inp('symbol', { required: true, list: 'symlist', placeholder: 'GBPAUD', autocapitalize: 'characters' }), { req: true }),
+      fld('Direction', pills('direction', [['long', '▲ Long'], ['short', '▼ Short']], 'radio'), { req: true }),
+      fld('Entry', num('entry')), fld('Stop', num('stop')), fld('Target', num('target')),
+      fld('Size (lots/units)', num('size')), fld('Risk % of account', num('risk')),
+      fld('Timeframe', sel('tf', ['15m', '1H', '4H', 'D', 'W'])),
+      fld('Setup (signal / level)', inp('setup', { placeholder: 'TAT OptBull retest of MajD 1.9070' }), { wide: true }),
+      fld('Idea came from', sel('source', m.sources)),
+      fld('In your plan before the session?', sel('planned', ['yes', 'no'], { required: true }), { req: true }),
+      fld('FOMO', sel('fomo', [0, 1, 2, 3, 4, 5].map(n => [n, n === 0 ? '0 — none' : n === 5 ? '5 — had to get in' : String(n)]), { required: true }), { req: true }),
+      fld('Confidence', sel('confidence', [1, 2, 3, 4, 5].map(n => [n, String(n)]))),
+      fld('Feeling right now', pills('emotion', m.emotions), { wide: true }),
+      fld('Why are you taking this trade?', area('why', 'In your own words'), { wide: true }),
+      fld('How do you feel?', area('feel', 'In your own words'), { wide: true }),
+      fld('FOMO check (tick what is true)', h('div', { class: 'checks' }, m.checklist.map((c, i) => h('label', null, h('input', { type: 'checkbox', name: 'checks', value: i }), ' ', c))), { wide: true }),
+      fld('Opened (SGT)', inp('opened', { value: sgtNow(), pattern: TIME_RE, placeholder: 'YYYY-MM-DD HH:MM' }), { hint: 'Change it to backfill an earlier trade' }),
+    ),
+  ], 'new');
+  const dirs = $('#mBody').querySelectorAll('input[name=direction]'); dirs[0].required = true;
+}
+
+function commentForm(t) {
+  openJournalForm(`Comment · ${t.symbol} ${t.direction} · ${t.opened}`, [
+    h('div', { class: 'fgrid' },
+      fld('Comment', area('text', 'Moved stop to BE, felt relieved…', { required: true, rows: 4 }), { req: true, wide: true }),
+      fld('At (SGT)', inp('at', { value: sgtNow(), pattern: TIME_RE }))),
+  ], 'comment', { ref: t.id });
+}
+
+async function closeTradeForm(t) {
+  const m = await api('/api/journal-meta');
+  if (!m) { toast('Journal options unavailable'); return; }
+  openJournalForm(`Close · ${t.symbol} ${t.direction} · ${t.opened}`, [
+    h('div', { class: 'fgrid' },
+      fld('Exit price', num('exit'), { hint: t.entry != null ? `entry ${t.entry} · stop ${t.stop ?? '—'}` : null }),
+      fld('Result in R', num('r'), { hint: 'Leave blank to compute from entry/stop/exit' }),
+      fld('P&L (SGD)', num('pnl')),
+      fld('Rules followed?', sel('rules', ['yes', 'partial', 'no'])),
+      fld('Mistakes', pills('mistakes', m.mistakes), { wide: true }),
+      fld('Exit & outcome notes', area('note', 'What happened, in your own words'), { wide: true }),
+      fld('Closed (SGT)', inp('closed', { value: sgtNow(), pattern: TIME_RE })),
+      fld('Never taken', h('label', { class: 'pill' }, h('input', { type: 'checkbox', name: 'cancel', value: '1' }), h('span', null, 'Cancel this trade')))),
+  ], 'close', { ref: t.id });
+}
+
 async function viewJournal(root) {
   const all = (await api('/api/journal', { fresh: true })) || [];
   const f = F('journal', { range: 'all', status: 'all', flagged: false });
@@ -976,11 +1170,13 @@ async function viewJournal(root) {
   root.replaceChildren(h('div', { class: 'view-head' }, h('h1', null, 'Trade Journal'),
     h('span', { class: 'sub' }, 'Why you took each trade, how you felt, and what it cost · wiki/notes/journal/'),
     h('span', { style: { marginLeft: 'auto' } }, seg([{ v: '7', label: '7d' }, { v: '30', label: '30d' }, { v: '90', label: '90d' }, { v: 'all', label: 'All' }],
-      f.range, v => { f.range = v; saveFilters(); render(); }))));
+      f.range, v => { f.range = v; saveFilters(); render(); })),
+    h('button', { class: 'btn primary', type: 'button', onclick: newTradeForm }, '＋ Log trade')));
 
   if (!all.length) {
     root.appendChild(card('No journal entries yet', null, h('div', { class: 'md' },
-      h('p', null, 'Log a trade from the terminal (it prompts for why, how you feel and the FOMO checklist):'),
+      h('p', null, h('button', { class: 'btn primary', type: 'button', onclick: newTradeForm }, '＋ Log your first trade')),
+      h('p', null, 'Or from the terminal (it prompts for why, how you feel and the FOMO checklist):'),
       h('pre', null, 'python3 scripts/journal.py new GBPAUD long\npython3 scripts/journal.py comment GBPAUD "moved stop to BE"\npython3 scripts/journal.py close GBPAUD --exit 1.9150'),
       h('p', null, 'Or copy wiki/notes/journal/_template.md in Obsidian, or tell Claude about the trade.'))));
     return;
@@ -1039,7 +1235,7 @@ async function viewJournal(root) {
     seg([{ v: 'all', label: 'All' }, { v: 'open', label: 'Open' }, { v: 'closed', label: 'Closed' }, { v: 'cancelled', label: 'Cancelled' }], f.status, v => { f.status = v; saveFilters(); render(); }),
     seg([{ v: true, label: '⚑ Flagged only' }], f.flagged ? true : null, () => { f.flagged = !f.flagged; saveFilters(); render(); })),
     rows.length ? h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' },
-      h('thead', null, h('tr', null, ['Opened (SGT)', 'Instrument', 'Setup / why', 'Feeling', 'FOMO', 'Result', 'Flags', 'Notes'].map(c => h('th', null, c)))),
+      h('thead', null, h('tr', null, ['Opened (SGT)', 'Instrument', 'Setup / why', 'Feeling', 'FOMO', 'Result', 'Flags', 'Notes', ''].map(c => h('th', null, c)))),
       h('tbody', null, rows.map(t => h('tr', { style: { cursor: 'pointer' }, title: 'Open journal entry', onclick: e => { if (!e.target.closest('[data-sym]')) openDoc(t.path, `${t.symbol} ${t.direction} · ${t.opened}`); } },
         h('td', { class: 'nowrap num' }, t.opened || '—'),
         h('td', { class: 'nowrap' }, symChip(t.symbol, tradeDir(t)), ' ', dirBadge(tradeDir(t))),
@@ -1049,7 +1245,10 @@ async function viewJournal(root) {
         h('td', { class: 'nowrap' }, t.status === 'closed' ? rSpan(t.result_r) : h('span', { class: 'tag' }, t.status)),
         h('td', null, t.flags.map(x => h('span', { class: `tag flag ${x}`, title: FLAG_LABEL[x] || x }, x)),
           t.mistakes.map(x => h('span', { class: 'tag mistake' }, x))),
-        h('td', { class: 'small nowrap' }, t.comments.length ? `💬 ${t.comments.length}` : '', t.checklist.done ? ` ✓ ${t.checklist.done}/${t.checklist.total}` : '')))))) : empty('No trades match'));
+        h('td', { class: 'small nowrap' }, t.comments.length ? `💬 ${t.comments.length}` : '', t.checklist.done ? ` ✓ ${t.checklist.done}/${t.checklist.total}` : ''),
+        h('td', { class: 'nowrap', onclick: e => e.stopPropagation() },
+          h('button', { class: 'btn sm', type: 'button', title: 'Add a comment', onclick: () => commentForm(t) }, '💬'),
+          t.status === 'open' ? h('button', { class: 'btn sm', type: 'button', onclick: () => closeTradeForm(t) }, 'Close') : null)))))) : empty('No trades match'));
   root.appendChild(h('div', { class: 'mt' }, tbl));
 
   // recent comments across all trades
@@ -1059,8 +1258,129 @@ async function viewJournal(root) {
     h('div', { class: 'd' }, c.text))))))));
 }
 
+// ============================================================ performance (broker statement logs)
+const money = (v, d = 2) => v === null || v === undefined ? '—' : (v < 0 ? '−' : '') + 'S$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+const moneySpan = (v, d) => h('span', { class: `num ${v > 0 ? 'up' : v < 0 ? 'down' : ''}` }, money(v, d));
+const pct = (v, d = 1) => v === null || v === undefined ? '—' : (100 * v).toFixed(d) + '%';
+const hrs = v => { if (!v) return '—'; const m = Math.round(v * 60); return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`; };
+const sinceOf = r => r === 'all' ? '' : r === 'ytd' ? sgtToday().slice(0, 4) + '-01-01' : addDays(sgtToday(), -Number(r));
+
+async function viewPerformance(root) {
+  const f = F('performance', { account: 'all', range: 'all', sort: 'deals', sym: '' });
+  const since = sinceOf(f.range);
+  const qs = `/api/performance?account=${f.account}${since ? '&since=' + since : ''}`;
+  const d = await api(qs, { fresh: !!S.perfRefresh });
+  S.perfRefresh = false;
+  const head = h('div', { class: 'view-head' }, h('h1', null, 'Performance'),
+    h('span', { class: 'sub' }, 'Realised P&L from the AXI and Fusion statement logs · SGD · times in SGT'),
+    h('span', { style: { marginLeft: 'auto', display: 'inline-flex', gap: '8px', flexWrap: 'wrap' } },
+      seg([{ v: 'all', label: 'All' }, { v: 'axi', label: 'AXI' }, { v: 'fusion', label: 'Fusion' }], f.account, v => { f.account = v; f.sym = ''; saveFilters(); render(); }),
+      seg([{ v: '30', label: '30d' }, { v: '90', label: '90d' }, { v: 'ytd', label: 'YTD' }, { v: '365', label: '1y' }, { v: 'all', label: 'All' }], f.range, v => { f.range = v; saveFilters(); render(); }),
+      h('button', { class: 'btn', type: 'button', title: 'Re-read both sheets now', onclick: async () => { toast('Refreshing statements…'); await api(qs + '&refresh=1', { fresh: true }); S.perfRefresh = true; render(); } }, '↻')));
+  if (!d) { root.replaceChildren(head, card('Statements unavailable', null, empty('The server could not load the statement logs.'))); return; }
+  const st = d.stats, acc = d.accounts;
+  const age = d.status.fetchedAt ? Math.round((Date.now() / 1000 - d.status.fetchedAt) / 60) : null;
+  const status = h('div', { class: 'small muted', style: { margin: '-6px 0 12px' } },
+    Object.values(acc).map(a => `${a.label}: ${a.trades} trades (${(a.first || '').slice(0, 10)} → ${(a.last || '').slice(0, 10)})`).join(' · '),
+    age !== null ? ` · ${d.status.source === 'snapshot' ? 'saved copy' : 'fetched'} ${age < 1 ? 'just now' : age + ' min ago'}` : '',
+    d.status.error ? h('span', { class: 'down' }, ` · sheet error: ${d.status.error}`) : null);
+  root.replaceChildren(head, status);
+  if (!st.trades) { root.appendChild(card('No closed trades in range', null, empty('Try a longer range or another account.'))); return; }
+
+  const kpi = (lbl, val, foot) => h('div', { class: 'kpi' }, h('div', { class: 'lbl' }, lbl), h('div', { class: 'val' }, val), h('div', { class: 'foot' }, foot));
+  root.appendChild(h('div', { class: 'kpis' },
+    kpi('Net realised P&L', moneySpan(st.net), `gross ${money(st.gross)} · swap ${money(st.swap)}`),
+    kpi('Win rate', pct(st.winRate, 2), `${st.wins} W · ${st.losses} L · ${st.be} BE`),
+    kpi('Trades closed', String(st.trades), `${st.long.deals} long (${pct(st.long.deals / st.trades, 0)}) · ${st.short.deals} short`),
+    kpi('Commissions', moneySpan(st.commission), `avg ${money(st.avgCommission)} / deal`),
+    kpi('Streak', st.streak ? h('span', { class: st.streak > 0 ? 'up' : 'down' }, `${Math.abs(st.streak)} ${st.streak > 0 ? 'wins' : 'losses'}`) : '—', 'latest closed trades'),
+  ));
+  root.appendChild(h('div', { class: 'kpis' },
+    kpi('Average win', moneySpan(st.avgWin), `total gains ${money(st.totalGains)}`),
+    kpi('Average loss', moneySpan(st.avgLoss), `total losses ${money(st.totalLosses)}`),
+    kpi('Profit factor', st.profitFactor === null ? '—' : st.profitFactor.toFixed(2), `win/loss ratio ${st.wlRatio === null ? '—' : st.wlRatio.toFixed(2)}`),
+    kpi('Largest gain / loss', h('span', { style: { display: 'flex', flexWrap: 'wrap', columnGap: '8px' } }, moneySpan(st.largestGain), moneySpan(st.largestLoss)), `best ${st.bestSymbol || '—'} · worst ${st.worstSymbol || '—'}`),
+    kpi('Expectancy', moneySpan(st.expectancy), 'average net per trade'),
+  ));
+
+  // equity curve (trading P&L only) + drawdown
+  const eq = st.equity;
+  let peak = -Infinity;
+  const dd = eq.map(p => { peak = Math.max(peak, p.cum); return +(p.cum - peak).toFixed(2); });
+  const eqBox = h('div');
+  const eqCard = card('Equity curve', `cumulative net P&L and drawdown (DD) · ${eq.length} trades`, eqBox,
+    h('div', { class: 'small muted', style: { marginTop: '6px' } }, 'Trading P&L only: deposits, withdrawals and transfers are left out so they don\'t show up as gains or drawdowns.'));
+  Charts.lines(eqBox, eq.map(p => p.t.slice(2, 10)), [
+    { name: 'P&L', color: 'var(--accent)', values: eq.map(p => p.cum) },
+    { name: 'DD', color: 'var(--bear)', values: dd }],
+    { aria: 'Cumulative net P&L and drawdown', height: 240, tipLabel: i => `${eq[i].t.slice(0, 16)}` });
+  const monBox = h('div');
+  const monCard = card('Monthly P&L', `${st.monthly.length} months`, monBox);
+  Charts.diverging(monBox, st.monthly.slice(-18).reverse().map(m => ({ label: m.month, value: Math.round(m.net), tip: `${m.deals} trades · win ${pct(m.winRate, 0)}` })), { aria: 'Monthly net P&L', labelW: 70 });
+  root.appendChild(h('div', { class: 'grid g-wide' }, eqCard, monCard));
+
+  // capital + hold time
+  const kv = rows => h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' }, h('tbody', null, rows.map(([k, v]) => h('tr', null, h('td', null, k), h('td', { class: 'num', style: { textAlign: 'right' } }, v))))));
+  const b = st.balance, e = st.equityDD;
+  const notes = Object.values(acc).filter(a => f.account === 'all' || a.label.toLowerCase() === f.account).flatMap(a => a.notes.map(n => `${a.label}: ${n}`));
+  root.appendChild(h('div', { class: 'grid g3 mt' },
+    card('Drawdown & account capital', 'balance includes cash movements', kv([
+      ['Peak account balance', money(b.peak)], ['Lowest balance (trough)', money(b.trough)], ['Latest balance', money(b.last)],
+      ['Max peak-to-trough drawdown (balance)', h('span', null, money(b.dd), ' · ', pct(b.ddPct, 2))],
+      ['Max drawdown (trading P&L only)', h('span', null, money(e.dd), ' · ', pct(e.ddPct, 2))],
+      ['Balance at start of range', money(e.start)]]),
+      notes.length ? h('ul', { class: 'small muted', style: { margin: '8px 0 0', paddingLeft: '18px' } }, notes.map(n => h('li', null, n))) : null),
+    card('Holding duration', null, kv([
+      ['Average hold (all trades)', hrs(st.hold.all)], ['Average hold (winners)', hrs(st.hold.win)],
+      ['Average hold (losers)', hrs(st.hold.loss)], ['Longest position held', hrs(st.hold.max)]]),
+      h('div', { class: 'small muted', style: { marginTop: '6px' } }, st.hold.win > st.hold.loss * 1.2 ? 'Winners are held longer than losers.' : st.hold.loss > st.hold.win * 1.2 ? 'Losers are held longer than winners. Check whether stops are being moved.' : '')),
+    card('Long vs short', null, kv([
+      ['Long', h('span', null, `${st.long.deals} · win ${pct(st.long.winRate, 0)} · `, moneySpan(st.long.net))],
+      ['Short', h('span', null, `${st.short.deals} · win ${pct(st.short.winRate, 0)} · `, moneySpan(st.short.net))],
+      ...st.classes.map(c => [c.cls, h('span', null, `${c.deals} · win ${pct(c.winRate, 0)} · `, moneySpan(c.net))])]))));
+
+  // day of week + hour of day
+  const bucketRow = (label, r) => h('tr', null, h('td', null, label), h('td', { class: 'num' }, r.deals), h('td', { class: 'num' }, r.wins), h('td', { class: 'num' }, r.losses),
+    h('td', { class: 'num' }, pct(r.winRate, 1)), h('td', null, moneySpan(r.avg)), h('td', null, moneySpan(r.net)));
+  const bucketHead = first => h('thead', null, h('tr', null, [first, 'Deals', 'Wins', 'Losses', 'Win rate', 'Avg P&L', 'Net P&L'].map(c => h('th', null, c))));
+  const days = st.dow.filter(r => r.deals);
+  const tot = { deals: st.trades, wins: st.wins, losses: st.losses, winRate: st.winRate, avg: st.expectancy, net: st.net };
+  const hourBox = h('div');
+  Charts.diverging(hourBox, st.hours.filter(r => r.deals).map(r => ({ label: `${String(r.hour).padStart(2, '0')}:00 (${r.deals})`, value: Math.round(r.net), tip: `win ${pct(r.winRate, 0)} · avg ${money(r.avg)}` })), { aria: 'Net P&L by hour closed', labelW: 84 });
+  root.appendChild(h('div', { class: 'grid g2 mt' },
+    card('Day-of-week performance', 'by close day (SGT)', h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' }, bucketHead('Day'),
+      h('tbody', null, days.map(r => bucketRow(r.day, r)), h('tr', { style: { fontWeight: 600 } }, bucketRow('Total', tot).childNodes))))),
+    card('By hour closed (SGT)', 'net P&L (deals)', hourBox)));
+
+  // symbol table
+  const sorters = { deals: (a, b) => b.deals - a.deals, net: (a, b) => b.net - a.net, worst: (a, b) => a.net - b.net, win: (a, b) => b.winRate - a.winRate };
+  const syms = st.symbols.filter(r => matches(S.q, r.symbol, r.cls)).sort(sorters[f.sort] || sorters.deals);
+  root.appendChild(h('div', { class: 'mt' }, card('Symbol performance', seg([{ v: 'deals', label: 'Most traded' }, { v: 'net', label: 'Best' }, { v: 'worst', label: 'Worst' }, { v: 'win', label: 'Win rate' }], f.sort, v => { f.sort = v; saveFilters(); render(); }),
+    h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' },
+      h('thead', null, h('tr', null, ['Symbol', 'Class', 'Deals', 'Wins', 'Losses', 'Win rate', 'Avg P&L', 'Net P&L'].map(c => h('th', null, c)))),
+      h('tbody', null, syms.map(r => h('tr', { style: { cursor: 'pointer' }, class: f.sym === r.symbol ? 'sel' : '', title: 'Show this symbol\'s trades',
+        onclick: e => { if (e.target.closest('[data-sym]')) return; f.sym = f.sym === r.symbol ? '' : r.symbol; saveFilters(); render(); } },
+        h('td', { class: 'nowrap' }, symChip(r.symbol)), h('td', null, h('span', { class: 'tag' }, r.cls)), h('td', { class: 'num' }, r.deals), h('td', { class: 'num' }, r.wins), h('td', { class: 'num' }, r.losses),
+        h('td', { class: 'num' }, pct(r.winRate, 1)), h('td', null, moneySpan(r.avg)), h('td', null, moneySpan(r.net)))),
+        h('tr', { style: { fontWeight: 600 } }, h('td', null, 'Total'), h('td'), h('td', { class: 'num' }, st.trades), h('td', { class: 'num' }, st.wins), h('td', { class: 'num' }, st.losses),
+          h('td', { class: 'num' }, pct(st.winRate, 1)), h('td', null, moneySpan(st.expectancy)), h('td', null, moneySpan(st.net)))))))));
+
+  // trades list
+  const list = d.list.filter(t => (!f.sym || t.symbol === f.sym) && matches(S.q, t.symbol, t.account, t.side));
+  root.appendChild(h('div', { class: 'mt' }, card(f.sym ? `Trades · ${f.sym}` : 'Trades', h('span', null, `${list.length} shown${d.list.length >= 500 ? ' (latest 500)' : ''}`,
+    f.sym ? h('button', { class: 'btn sm', type: 'button', style: { marginLeft: '8px' }, onclick: () => { f.sym = ''; saveFilters(); render(); } }, 'Clear') : null),
+    list.length ? h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' },
+      h('thead', null, h('tr', null, ['Closed (SGT)', 'Account', 'Instrument', 'Size', 'Entry → exit', 'Held', 'Comm + swap', 'Net'].map(c => h('th', null, c)))),
+      h('tbody', null, list.slice(0, 300).map(t => h('tr', null,
+        h('td', { class: 'nowrap num' }, (t.close || '').slice(0, 16)), h('td', null, h('span', { class: 'tag' }, acc[t.account].label)),
+        h('td', { class: 'nowrap' }, symChip(t.symbol, t.side === 'long' ? 'bull' : 'bear'), ' ', dirBadge(t.side === 'long' ? 'bull' : 'bear')),
+        h('td', { class: 'num' }, t.size), h('td', { class: 'num nowrap' }, `${t.entry} → ${t.exit}`), h('td', { class: 'num nowrap' }, hrs(t.hold)),
+        h('td', null, moneySpan(+(t.commission + t.swap).toFixed(2))), h('td', null, moneySpan(t.net)))))))
+      : empty('No trades match'))));
+}
+
 // ============================================================ routing & rendering
-const VIEWS = { desk: viewDesk, signals: viewSignals, analysis: viewAnalysis, calendar: viewCalendar, ahh: viewAhh, brief: viewBrief, 'my-watchlist': viewMyWatchlist, journal: viewJournal };
+const VIEWS = { desk: viewDesk, signals: viewSignals, analysis: viewAnalysis, calendar: viewCalendar, ahh: viewAhh, brief: viewBrief, 'my-watchlist': viewMyWatchlist, journal: viewJournal, performance: viewPerformance };
 let renderSeq = 0;
 async function render() {
   const seq = ++renderSeq, view = S.view, root = $('#view-' + view);
@@ -1093,6 +1413,50 @@ function route() {
 }
 function setQuery(q) { $('#q').value = q; S.q = q; }
 
+// ============================================================ terminal chrome: clock, sessions, tape
+const SESSION_DEFS = [['TKY', 'Asia/Tokyo', 9, 18], ['LDN', 'Europe/London', 8, 17], ['NYC', 'America/New_York', 8, 17]];
+function tickClock() {
+  const now = new Date();
+  $('#clock').textContent = now.toLocaleTimeString('en-GB', { hour12: false, timeZone: 'Asia/Singapore' }) + ' SGT';
+  $('#sessions').replaceChildren(...SESSION_DEFS.map(([n, tz, o, c]) => {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: 'numeric', hour12: false, weekday: 'short' })
+      .formatToParts(now).map(x => [x.type, x.value]));
+    const hr = +p.hour % 24, open = !['Sat', 'Sun'].includes(p.weekday) && hr >= o && hr < c;
+    return h('span', { class: open ? 'on' : '', title: `${n} ${open ? 'open' : 'closed'}` }, n);
+  }));
+}
+const TAPE_PX_PER_SEC = 50;
+async function renderTape() {
+  const rows = sigRows().filter(r => r.dir === 'bull' || r.dir === 'bear').slice(0, 40);
+  const news = await api('/api/news');
+  const items = [];
+  const heads = ((news && news.market) || []).slice(0, 14);
+  const headline = n => h('a', { class: 'it news', href: n.url, target: '_blank', rel: 'noopener noreferrer', title: n.title },
+    h('b', null, 'NEWS'), h('span', { class: 'hd' }, n.title.length > 95 ? n.title.slice(0, 94) + '…' : n.title),
+    h('span', { class: 'tm' }, n.time.slice(5)));
+  rows.forEach((r, i) => {
+    items.push(h('span', { class: `it ${r.dir}`, dataset: { sym: r.sym } },
+      h('b', null, r.sym), h('span', { class: 'ar' }, r.dir === 'bull' ? '▲' : '▼'), h('span', { class: 'sg' }, r.signal || ''),
+      h('span', { class: 'tm' }, `${r.src} ${shortDate(r.date)}${r.time ? ' ' + r.time : ''}`)));
+    if (i % 3 === 2 && heads.length) items.push(headline(heads.shift()));  // one headline per three signals
+  });
+  heads.forEach(n => items.push(headline(n)));
+  const tape = $('#tape');
+  if (!items.length) { tape.replaceChildren(h('span', { class: 'it' }, h('span', { class: 'tm' }, 'Waiting for signals…'))); return; }
+  // two copies so the -50% keyframe loops seamlessly
+  const clone = () => items.map(n => n.cloneNode(true));
+  const trk = h('div', { class: 'trk' }, ...items, ...clone());
+  tape.replaceChildren(trk);
+  // constant scroll speed whatever the item count: one loop = half the track width
+  requestAnimationFrame(() => { trk.style.animationDuration = Math.max(20, trk.scrollWidth / 2 / TAPE_PX_PER_SEC) + 's'; });
+}
+const COMMANDS = {
+  desk: 'desk', home: 'desk', signals: 'signals', sig: 'signals', tat: 'signals', analysis: 'analysis', an: 'analysis',
+  calendar: 'calendar', cal: 'calendar', econ: 'calendar', news: 'desk', ahh: 'ahh', sessions: 'ahh', ideas: 'ahh',
+  brief: 'brief', daily: 'brief', watchlist: 'my-watchlist', wl: 'my-watchlist', journal: 'journal', jnl: 'journal',
+  performance: 'performance', perf: 'performance', pnl: 'performance',
+};
+
 // ============================================================ boot
 function wire() {
   let t = null;
@@ -1102,14 +1466,19 @@ function wire() {
   });
   $('#q').addEventListener('keydown', e => {
     if (e.key === 'Enter') {
+      const cmd = COMMANDS[e.target.value.trim().replace(/^[:>]/, '').toLowerCase()];
+      if (cmd) { e.target.value = ''; S.q = ''; e.target.blur(); go(cmd); return; }
       const v = e.target.value.trim().toUpperCase();
       const known = (S.meta && S.meta.symbols) || [];
       if (known.includes(v) || sigRows().some(r => r.sym === v)) openSymbol(v);
     } else if (e.key === 'Escape') { e.target.value = ''; S.q = ''; render(); e.target.blur(); }
   });
   document.addEventListener('keydown', e => {
-    if (e.key === '/' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'SELECT') { e.preventDefault(); $('#q').focus(); $('#q').select(); }
+    if (e.key === '/' && !['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) { e.preventDefault(); $('#q').focus(); $('#q').select(); }
     if (e.key === 'Escape' && document.activeElement !== $('#q')) closeOverlays();
+    if (/^[1-9]$/.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey && !['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+      const a = document.querySelectorAll('#nav a')[+e.key - 1]; if (a) go(a.dataset.view);
+    }
   });
   document.addEventListener('click', e => {
     const s = e.target.closest('[data-sym]');
@@ -1117,9 +1486,67 @@ function wire() {
     const d = e.target.closest('[data-doc]');
     if (d) { e.preventDefault(); openDoc(d.dataset.doc, d.textContent); return; }
     const img = e.target.closest('img[data-full]');
-    if (img) { lightbox(img.dataset.full, img.dataset.cap); }
+    if (img) {
+      const scope = img.closest('.wgrid') || img.parentElement;
+      const imgs = [...scope.querySelectorAll('img[data-full]')];
+      lightbox(img.dataset.full, img.dataset.cap, imgs.map(i => ({ full: i.dataset.full, cap: i.dataset.cap, thumb: i.getAttribute('src') })), imgs.indexOf(img));
+    }
   });
-  $('#lightbox').addEventListener('click', () => $('#lightbox').classList.remove('show'));
+  // lightbox: the track scrolls natively (swipe / trackpad); sync the index when a scroll settles
+  const lbTrack = $('#lbTrack'), lbStrip = $('#lbStrip');
+  let lbScrollT = null, lbDrag = null, lbMoved = false, lbWheelAt = 0;
+  lbTrack.addEventListener('scroll', () => {
+    clearTimeout(lbScrollT);
+    lbScrollT = setTimeout(() => {
+      const i = Math.round(lbTrack.scrollLeft / Math.max(1, lbTrack.clientWidth));
+      if (lbAuto !== null) { if (i === lbAuto) lbAuto = null; return; }
+      if (i !== lbIdx && i >= 0 && i < lbGroup.length) { lbIdx = i; lbShow(); }
+    }, 90);
+  }, { passive: true });
+  // mouse: a vertical wheel flips one chart (horizontal trackpad scrolling is left to the browser)
+  lbTrack.addEventListener('wheel', e => {
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY) || lbGroup.length < 2) return;
+    e.preventDefault();
+    const now = Date.now();
+    if (now - lbWheelAt > 350 && Math.abs(e.deltaY) > 4) { lbWheelAt = now; lbStep(e.deltaY > 0 ? 1 : -1); }
+  }, { passive: false });
+  // mouse: click-and-drag pans the track, then snaps to the nearest chart
+  lbTrack.addEventListener('pointerdown', e => {
+    if (e.pointerType !== 'mouse' || lbGroup.length < 2) return;
+    lbDrag = { x: e.clientX, left: lbTrack.scrollLeft }; lbMoved = false;
+    lbTrack.classList.add('dragging');
+  });
+  window.addEventListener('pointermove', e => {
+    if (!lbDrag) return;
+    const dx = e.clientX - lbDrag.x;
+    if (Math.abs(dx) > 5) lbMoved = true;
+    lbTrack.scrollLeft = lbDrag.left - dx;
+  });
+  window.addEventListener('pointerup', e => {
+    if (!lbDrag) return;
+    const dx = e.clientX - lbDrag.x, w = lbTrack.clientWidth;
+    lbDrag = null; lbTrack.classList.remove('dragging');
+    if (lbMoved) lbGo(Math.abs(dx) > w * 0.15 ? lbIdx + (dx < 0 ? 1 : -1) : lbIdx);
+  });
+  // the thumbnail strip scrolls sideways with a plain mouse wheel too
+  lbStrip.addEventListener('wheel', e => {
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { e.preventDefault(); lbStrip.scrollLeft += e.deltaY; }
+  }, { passive: false });
+  $('#lightbox').addEventListener('click', e => {
+    if (lbMoved) { lbMoved = false; return; }   // end of a drag, not a click
+    const to = e.target.closest('[data-lbto]');
+    if (to) { lbGo(+to.dataset.lbto); return; }
+    const nav = e.target.closest('[data-lb]');
+    if (nav) { lbStep(+nav.dataset.lb); return; }
+    if (e.target.closest('#lbStrip')) return;
+    $('#lightbox').classList.remove('show');
+  });
+  window.addEventListener('resize', () => { if ($('#lightbox').classList.contains('show')) lbGo(lbIdx, false); });
+  document.addEventListener('keydown', e => {
+    if (!$('#lightbox').classList.contains('show')) return;
+    if (e.key === 'ArrowLeft') { e.preventDefault(); lbStep(-1); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); lbStep(1); }
+  });
   $('#scrim').addEventListener('click', closeOverlays);
   $('#dClose').addEventListener('click', () => { $('#drawer').classList.remove('show'); if (!$('#modal').classList.contains('show')) $('#scrim').classList.remove('show'); $('#dSym').textContent = ''; });
   $('#mClose').addEventListener('click', () => { $('#modal').classList.remove('show'); if (!$('#drawer').classList.contains('show')) $('#scrim').classList.remove('show'); });
@@ -1127,8 +1554,9 @@ function wire() {
     $('#sheetDot').className = 'dot busy'; $('#sheetLbl').textContent = 'Refreshing…';
     for (const k of Object.keys(cache)) delete cache[k];
     S.meta = await api('/api/meta');
+    cache['/api/news'] = Promise.resolve(await api('/api/news?refresh=1', { fresh: true }));
     await loadSignals(true);
-    fillSymbols(); render(); toast('Wiki + alert sheet reloaded');
+    fillSymbols(); renderTape(); render(); toast('Wiki + alert sheet reloaded');
   });
   $('#themeBtn').addEventListener('click', () => {
     const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
@@ -1146,6 +1574,7 @@ function fillSymbols() {
   const theme = store.get('theme', null);
   if (theme) document.documentElement.dataset.theme = theme;
   wire();
+  tickClock(); setInterval(tickClock, 1000);
   S.view = VIEWS[location.hash.slice(1)] ? location.hash.slice(1) : store.get('view', 'desk');
   S.meta = await api('/api/meta');
   updateSheetStatus();
@@ -1155,14 +1584,14 @@ function fillSymbols() {
   if (hash.startsWith('sym=')) openSymbol(decodeURIComponent(hash.slice(4)));
   // the alert sheet takes a few seconds on first load; render again once it lands
   await loadSignals();
-  fillSymbols();
+  fillSymbols(); renderTape();
   if (['desk', 'signals'].includes(S.view)) render();
   let lastFetch = S.sig && S.sig.status && S.sig.status.fetchedAt;
   setInterval(async () => {
     await loadSignals();
     const f = S.sig && S.sig.status && S.sig.status.fetchedAt;
     if (f && f !== lastFetch) {
-      lastFetch = f; fillSymbols();
+      lastFetch = f; fillSymbols(); renderTape();
       if (['desk', 'signals'].includes(S.view) && !$('#drawer').classList.contains('show')) render();
     }
   }, 60000);
