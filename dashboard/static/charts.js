@@ -1,4 +1,4 @@
-/* Minimal SVG chart primitives for the Trading Desk.
+/* Minimal SVG chart primitives for the Trade Terminal.
  * Colors come from CSS custom properties so light/dark themes swap in one place.
  * Every chart is interactive: per-mark tooltips on bars, crosshair + all-series
  * readout on lines. Labels go in via textContent (data is treated as untrusted). */

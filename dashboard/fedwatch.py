@@ -45,7 +45,7 @@ def _current_range():
 
 
 def _build():
-    p = subprocess.run([sys.executable, str(SCRIPT), "--json"], capture_output=True, text=True, timeout=90,
+    p = subprocess.run([sys.executable, str(SCRIPT), "--json"], capture_output=True, text=True, timeout=25,
                        stdin=subprocess.DEVNULL)
     out = p.stdout
     i = out.find("{")  # the SDK logs a connect line to stdout before the JSON

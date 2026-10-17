@@ -1,4 +1,4 @@
-/* Trading Desk — single-page app over /api/*. No build step, no framework. */
+/* Trade Terminal — single-page app over /api/*. No build step, no framework. */
 'use strict';
 
 // ============================================================ utilities
@@ -296,7 +296,7 @@ async function viewDesk(root) {
     h('div', { class: 'lbl' }, lbl), h('div', { class: `val ${small ? 'sm' : ''}` }, val), h('div', { class: 'foot' }, foot));
 
   root.replaceChildren(
-    h('div', { class: 'view-head' }, h('h1', null, 'Trading Desk'), h('span', { class: 'sub' }, `${niceDate(today)} · SGT`)),
+    h('div', { class: 'view-head' }, h('h1', null, 'Trade Terminal'), h('span', { class: 'sub' }, `${niceDate(today)} · SGT`)),
     h('div', { class: 'kpis' },
       kpi(`Signals ${lastDay === today ? 'today' : shortDate(lastDay) || ''}`,
         h('span', null, h('span', { style: { color: 'var(--bull-ink)' } }, `▲${nBull}`), ' ', h('span', { style: { color: 'var(--bear-ink)' } }, `▼${nBear}`)),
@@ -380,7 +380,12 @@ async function viewDesk(root) {
   put(evCard, 'span-5');
   put(csCard, 'span-4'); put(trendCard, 'span-4'); put(flowCard, 'span-4');
   put(setCard, 'span-4'); put(pCard, 'span-4'); put(aCard, 'span-4');
-  if (cb && cb.stances.length) put(cbCard(cb), 'span-12');
+  if (cb && cb.stances.length) put(cbCard(cb), 'span-8');
+  const fedHolder = put(card('Fed rate odds', 'loading…', empty('Fetching FedWatch…')), 'span-4');
+  api('/api/fedwatch').then(fw => {  // slow when OpenD is cold, so don't hold the whole desk for it
+    if (!fedHolder.isConnected) return;
+    const c = fedCard(fw); c.classList.add('span-4'); fedHolder.replaceWith(c);
+  });
 }
 
 function newsCard(news) {
@@ -398,6 +403,7 @@ function newsCard(news) {
     seg([{ v: 1, label: '24h' }, { v: 3, label: '3d' }, { v: 7, label: '7d' }, { v: 30, label: '30d' }].filter(o => !mkt || o.v <= 7), Math.min(fd.range, mkt ? 7 : 30), v => { fd.range = v; saveFilters(); render(); }),
     news && news.fetchedAt ? h('span', { class: 'small muted' }, `moomoo · ${news.fetchedAt.slice(5, 16).replace('T', ' ')} SGT`) : null);
   const c = card(mkt ? 'Latest market news' : 'Watchlist news', right);
+  c.dataset.news = '1';
   if (!news || !news.items) { c.appendChild(empty('News unavailable — moomoo could not be reached')); return c; }
   if (news.error) c.appendChild(h('div', { class: 'small muted' }, `Showing last good pull — refresh failed: ${news.error}`));
   c.appendChild(shown.length ? h('div', { class: 'list' }, shown.map(i => h('div', { class: 'li' }, h('div', { class: 'body' },
@@ -1415,9 +1421,20 @@ function setQuery(q) { $('#q').value = q; S.q = q; }
 
 // ============================================================ terminal chrome: clock, sessions, tape
 const SESSION_DEFS = [['TKY', 'Asia/Tokyo', 9, 18], ['LDN', 'Europe/London', 8, 17], ['NYC', 'America/New_York', 8, 17]];
+function setSidebar(collapsed) {
+  document.documentElement.classList.toggle('side-collapsed', collapsed);
+  const b = $('#sideToggle');
+  b.textContent = collapsed ? '»' : '«';
+  b.title = collapsed ? 'Expand sidebar ([)' : 'Collapse sidebar ([)';
+  b.setAttribute('aria-label', b.title); b.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  store.set('sideCollapsed', collapsed);
+  tickClock();
+  setTimeout(() => { document.querySelectorAll('.chart').forEach(c => { c._w = null; }); window.dispatchEvent(new Event('resize')); }, 180);
+}
 function tickClock() {
   const now = new Date();
-  $('#clock').textContent = now.toLocaleTimeString('en-GB', { hour12: false, timeZone: 'Asia/Singapore' }) + ' SGT';
+  const clk = $('#clock'), t = now.toLocaleTimeString('en-GB', { hour12: false, timeZone: 'Asia/Singapore' });
+  clk.replaceChildren(document.createTextNode(document.documentElement.classList.contains('side-collapsed') ? t.slice(0, 5) : t), h('span', { class: 'tz' }, ' SGT'));
   $('#sessions').replaceChildren(...SESSION_DEFS.map(([n, tz, o, c]) => {
     const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: 'numeric', hour12: false, weekday: 'short' })
       .formatToParts(now).map(x => [x.type, x.value]));
@@ -1450,6 +1467,25 @@ async function renderTape() {
   // constant scroll speed whatever the item count: one loop = half the track width
   requestAnimationFrame(() => { trk.style.animationDuration = Math.max(20, trk.scrollWidth / 2 / TAPE_PX_PER_SEC) + 's'; });
 }
+// An open tab re-reads the server's cached news every 5 min (a local read, never a moomoo call) and swaps in
+// only the news card + tape when the server's pull time has changed, so scroll position elsewhere is kept.
+const NEWS_POLL_MS = 5 * 60 * 1000;
+let newsPolledAt = Date.now();
+async function pollNews() {
+  newsPolledAt = Date.now();
+  const prev = await api('/api/news');
+  const next = await api('/api/news', { fresh: true });
+  if (!next || !next.fetchedAt || (prev && prev.fetchedAt === next.fetchedAt)) return;
+  renderTape();
+  const old = $('[data-news]');
+  if (S.view === 'desk' && old && old.isConnected) {
+    const list = old.querySelector('.list'), top = list ? list.scrollTop : 0;
+    const fresh = newsCard(next);
+    fresh.className = old.className;
+    old.replaceWith(fresh);
+    const nl = fresh.querySelector('.list'); if (nl) nl.scrollTop = top;
+  }
+}
 const COMMANDS = {
   desk: 'desk', home: 'desk', signals: 'signals', sig: 'signals', tat: 'signals', analysis: 'analysis', an: 'analysis',
   calendar: 'calendar', cal: 'calendar', econ: 'calendar', news: 'desk', ahh: 'ahh', sessions: 'ahh', ideas: 'ahh',
@@ -1476,6 +1512,7 @@ function wire() {
   document.addEventListener('keydown', e => {
     if (e.key === '/' && !['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) { e.preventDefault(); $('#q').focus(); $('#q').select(); }
     if (e.key === 'Escape' && document.activeElement !== $('#q')) closeOverlays();
+    if (e.key === '[' && !['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) $('#sideToggle').click();
     if (/^[1-9]$/.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey && !['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
       const a = document.querySelectorAll('#nav a')[+e.key - 1]; if (a) go(a.dataset.view);
     }
@@ -1574,7 +1611,9 @@ function fillSymbols() {
   const theme = store.get('theme', null);
   if (theme) document.documentElement.dataset.theme = theme;
   wire();
-  tickClock(); setInterval(tickClock, 1000);
+  $('#sideToggle').addEventListener('click', () => setSidebar(!document.documentElement.classList.contains('side-collapsed')));
+  setSidebar(store.get('sideCollapsed', false));
+  setInterval(tickClock, 1000);
   S.view = VIEWS[location.hash.slice(1)] ? location.hash.slice(1) : store.get('view', 'desk');
   S.meta = await api('/api/meta');
   updateSheetStatus();
@@ -1586,6 +1625,8 @@ function fillSymbols() {
   await loadSignals();
   fillSymbols(); renderTape();
   if (['desk', 'signals'].includes(S.view)) render();
+  setInterval(pollNews, NEWS_POLL_MS);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - newsPolledAt > NEWS_POLL_MS) pollNews(); });
   let lastFetch = S.sig && S.sig.status && S.sig.status.fetchedAt;
   setInterval(async () => {
     await loadSignals();

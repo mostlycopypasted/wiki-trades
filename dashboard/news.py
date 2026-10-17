@@ -23,7 +23,7 @@ SNAPSHOT = HERE / "cache" / "news.json"
 WATCHLIST = W.ROOT / "scripts" / "equity_watchlist.json"
 ENDPOINT = "https://ai-news-search.moomoo.com/news_search"
 UA = "moomoo-news-search/0.0.2 (Skill)"
-TTL = 1800
+TTL = 900  # server-side refresh interval: 15 minutes
 PER_QUERY = 20
 PER_SYMBOL = 6
 MAX_AGE_DAYS = 30
@@ -230,3 +230,17 @@ def news(refresh=False):
     with _lock:
         d = _state["data"] or {"items": [], "names": {}, "failed": [], "fetchedAt": None}
         return {**d, "error": _state["error"], "loading": _state["loading"]}
+
+
+def start_background(interval=TTL):
+    """Pull on startup, then every `interval` seconds, so the cache is warm without anyone asking."""
+    def loop():
+        while True:
+            with _lock:
+                go = not _state["loading"]
+                if go:
+                    _state["loading"] = True
+            if go:
+                _refresh()
+            time.sleep(interval)
+    threading.Thread(target=loop, daemon=True, name="news-refresh").start()

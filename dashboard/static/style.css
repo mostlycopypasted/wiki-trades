@@ -673,3 +673,26 @@ select, input[type=date], input.txt { border-radius: 0; background: #000; paddin
 .tape .it.news { color: var(--text-2); text-decoration: none; }
 .tape .it.news b { color: #000; background: var(--accent); padding: 0 4px; font-size: 10px; letter-spacing: .5px; }
 .tape .it.news:hover .hd { color: var(--accent); text-decoration: underline; }
+
+/* ---------- collapsible sidebar (desktop) ---------- */
+.sidetoggle { display: none; }
+@media (min-width: 821px) {
+  .brand { position: relative; padding-right: 34px; }
+  .sidetoggle {
+    display: block; position: absolute; top: 12px; right: 8px; width: 22px; height: 22px; padding: 0; line-height: 1;
+    background: #000; border: 1px solid var(--border); color: var(--muted); cursor: pointer; font: 12px var(--mono);
+  }
+  .sidetoggle:hover { color: var(--accent); border-color: var(--accent); }
+  html.side-collapsed { --side-w: 52px; }
+  html.side-collapsed .brand { padding: 12px 0 8px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  html.side-collapsed .brand .name, html.side-collapsed .search-wrap, html.side-collapsed .nav a .lb,
+  html.side-collapsed .status .sessions, html.side-collapsed #sheetLbl, html.side-collapsed #sheetDot { display: none; }
+  html.side-collapsed .sidetoggle { position: static; }
+  html.side-collapsed .nav a { padding: 0; justify-content: center; }
+  html.side-collapsed .nav a i { width: auto; text-align: center; font-size: 13px; opacity: 1; }
+  html.side-collapsed .status { padding: 10px 4px; justify-content: center; }
+  html.side-collapsed .status .clock { font-size: 10px; text-align: center; }
+  html.side-collapsed .status .clock .tz { display: none; }
+  .topbar, main, .tape { transition: width .15s ease, margin-left .15s ease; }
+}
+@media (prefers-reduced-motion: reduce) { .topbar, main, .tape { transition: none; } }

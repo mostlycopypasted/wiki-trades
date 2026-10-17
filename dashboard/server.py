@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Trading Desk — local web dashboard over the wiki and the live TAT alert sheet.
+"""Trade Terminal — local web dashboard over the wiki and the live TAT alert sheet.
 
     .venv/bin/python3 dashboard/server.py            # http://127.0.0.1:8787
     .venv/bin/python3 dashboard/server.py --port 9000
@@ -255,13 +255,14 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Trading Desk dashboard server")
+    ap = argparse.ArgumentParser(description="Trade Terminal dashboard server")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8787)
     args = ap.parse_args()
     threading.Thread(target=W.SHEET.get, daemon=True).start()  # warm the alert-sheet cache
+    NEWS.start_background()  # moomoo news: pull now, then every 15 min
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
-    print("📊 Trading Desk on http://%s:%d  (Ctrl+C to stop)" % (args.host, args.port), flush=True)
+    print("📊 Trade Terminal on http://%s:%d  (Ctrl+C to stop)" % (args.host, args.port), flush=True)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

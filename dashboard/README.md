@@ -1,4 +1,4 @@
-# Trading Desk dashboard
+# Trade Terminal dashboard
 
 A local, read-only web dashboard over this wiki and the live TAT alert Google Sheet.
 
@@ -51,7 +51,7 @@ Terminal skin: black and amber, monospace, square panels with title bars, a live
 
 | View | Source |
 | --- | --- |
-| **Desk** | Overview: today's signal counts, next high-impact event, **News** card with two tabs, *Watchlist* (moomoo headlines for `scripts/equity_watchlist.json`) and *Latest* (market-wide moomoo headlines from the topic searches in `MARKET_TOPICS`, last 7 days, broker-rating and listing-notice noise filtered out), both via `dashboard/news.py`: 30-min cache, last good copy in `cache/news.json`, ↻ forces a re-pull, 24h/3d/7d/30d filter), currency strength + trend, 14-day signal flow, latest TAT setups, upcoming events, suggested pairs / D-R-H-R, latest AHH ideas, central bank tally |
+| **Desk** | Overview: today's signal counts, next high-impact event, **News** card with two tabs, *Watchlist* (moomoo headlines for `scripts/equity_watchlist.json`) and *Latest* (market-wide moomoo headlines from the topic searches in `MARKET_TOPICS`, last 7 days, broker-rating and listing-notice noise filtered out), both via `dashboard/news.py`: server re-pulls every 15 min on its own timer, last good copy in `cache/news.json`, ↻ forces an immediate re-pull, 24h/3d/7d/30d filter), currency strength + trend, 14-day signal flow, latest TAT setups, upcoming events, suggested pairs / D-R-H-R, latest AHH ideas, central bank tally |
 | **TAT Signals** | Live alert sheet (1H, 4H, Daily FX, TV Stocks, Yahoo Bull/Bear). Filter by range, source, direction, signal size, asset class, currency; signals-per-day chart, most-active instruments, multi-timeframe alignment matrix, sortable table |
 | **Analysis** | `wiki/reports/tat_analysis/` runs per date: extracted ⭐⭐⭐ dual-alignment and retest setups, run-over-run diff table, full narrative (search terms highlighted); plus the Daily Signals executive summary |
 | **Calendar** | `wiki/notes/economic-calendar.md` with impact/currency/date filters and countdowns; central bank tally and upcoming rate decisions |

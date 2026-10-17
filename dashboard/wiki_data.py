@@ -1,4 +1,4 @@
-"""Data layer for the Trading Desk dashboard.
+"""Data layer for the Trade Terminal dashboard.
 
 Reads the LLM-maintained wiki (daily briefs, TAT alert reports, Daily Signals,
 AHH Session Notes, economic calendar, central bank tally, market sentiment) and
