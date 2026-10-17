@@ -35,6 +35,7 @@ import json
 import argparse
 import datetime
 import urllib.request
+from zoneinfo import ZoneInfo
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -63,8 +64,59 @@ def yahoo_ticker(symbol):
     return f"{clean_sym}=X"
 
 
+NY = ZoneInfo("America/New_York")
+
+
+def _moomoo_bars(symbol, ktype, days):
+    """US stock bars (oldest -> newest) from the local moomoo OpenD gateway, or [] if unreachable.
+
+    moomoo stamps intraday US bars with their END time in New York time (09:30-10:30 is
+    labelled 10:30, the closing half hour 15:30-16:00 is labelled 16:00), whereas Yahoo
+    stamps the start. Labels are shifted back to the bar start so callers see the same
+    shape either source returns. Daily bars are stamped at the session date's midnight.
+    """
+    try:
+        from moomoo import OpenQuoteContext, KLType, AuType, RET_OK, SysConfig
+    except ImportError:
+        return []
+    kl = {"60m": KLType.K_60M, "1d": KLType.K_DAY}[ktype]
+    end = datetime.datetime.now(NY).date()
+    start = end - datetime.timedelta(days=days)
+    ctx = None
+    try:
+        ctx = OpenQuoteContext(host="127.0.0.1", port=11111, ai_type=1)
+        ret, df, _ = ctx.request_history_kline(
+            f"US.{symbol}", start=str(start), end=str(end), ktype=kl,
+            autype=AuType.QFQ, max_count=1000)
+        if ret != RET_OK:
+            return []
+    except Exception:
+        return []
+    finally:
+        if ctx is not None:
+            ctx.close()
+
+    bars = []
+    for _, r in df.iterrows():
+        label = datetime.datetime.strptime(r["time_key"], "%Y-%m-%d %H:%M:%S").replace(tzinfo=NY)
+        if ktype == "60m":
+            dt = label - datetime.timedelta(minutes=30 if (label.hour, label.minute) == (16, 0) else 60)
+        else:
+            dt = label
+        bars.append({'dt': dt.astimezone(SGT), 'open': float(r["open"]), 'high': float(r["high"]),
+                     'low': float(r["low"]), 'close': float(r["close"])})
+    return bars
+
+
 def fetch_1h_bars(symbol, range_param="30d"):
     """Fetch closed 1H bars (oldest -> newest), dropping the still-forming current hour."""
+    clean = symbol.split(':')[-1].upper()
+    if clean in STOCK_TICKERS:
+        bars = _moomoo_bars(clean, "60m", int(range_param.rstrip("d")))
+        if bars:
+            now_hr = datetime.datetime.now(SGT).replace(minute=0, second=0, microsecond=0)
+            return [b for b in bars if b['dt'] < now_hr]
+        # moomoo unreachable (OpenD down / logged out) -> fall back to Yahoo below
     ticker = yahoo_ticker(symbol)
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1h&range={range_param}"
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -113,6 +165,12 @@ def aggregate_4h_bars(hourly_bars):
 
 
 def fetch_daily_bars(symbol, range_param="6mo"):
+    clean = symbol.split(':')[-1].upper()
+    if clean in STOCK_TICKERS:
+        bars = _moomoo_bars(clean, "1d", 180)
+        if bars:
+            today_ny = datetime.datetime.now(NY).date()
+            return [b for b in bars if b['dt'].astimezone(NY).date() < today_ny]
     ticker = yahoo_ticker(symbol)
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}?interval=1d&range={range_param}"
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})

@@ -1,0 +1,211 @@
+[
+  {
+    "symbol": "000660.KS",
+    "market": "KRX",
+    "added": "2026-08-05",
+    "note": "SK Hynix — originally the seed case for the Correction Discount Rule (retired 2026-09-02, no TradingView 52-week-range equivalent); kept for ordinary news/price tracking",
+    "name": "SK Hynix",
+    "news_keyword": "SK Hynix"
+  },
+  {
+    "symbol": "D05.SI",
+    "market": "SGX",
+    "added": "2026-08-05",
+    "note": "DBS Group Holdings",
+    "name": "DBS Group Holdings",
+    "news_keyword": "DBS Group"
+  },
+  {
+    "symbol": "O39.SI",
+    "market": "SGX",
+    "added": "2026-08-05",
+    "note": "OCBC (Oversea-Chinese Banking Corp)",
+    "name": "OCBC Bank",
+    "news_keyword": "OCBC"
+  },
+  {
+    "symbol": "U11.SI",
+    "market": "SGX",
+    "added": "2026-08-05",
+    "note": "UOB (United Overseas Bank)",
+    "name": "United Overseas Bank",
+    "news_keyword": "United Overseas Bank"
+  },
+  {
+    "symbol": "558.SI",
+    "market": "SGX",
+    "added": "2026-08-05",
+    "note": "UMS Holdings",
+    "name": "UMS Holdings",
+    "news_keyword": "UMS Holdings"
+  },
+  {
+    "symbol": "A55.SI",
+    "market": "SGX",
+    "added": "2026-08-15",
+    "note": "From TradingView watchlist: 3 Global Stocks",
+    "name": "Asia Enterprises Holding",
+    "news_keyword": "Asia Enterprises Holding"
+  },
+  {
+    "symbol": "OU8.SI",
+    "market": "SGX",
+    "added": "2026-08-15",
+    "note": "From TradingView watchlist: 3 Global Stocks",
+    "name": "Centurion Corporation",
+    "news_keyword": "Centurion Corporation"
+  },
+  {
+    "symbol": "Q01.SI",
+    "market": "SGX",
+    "added": "2026-08-15",
+    "note": "From TradingView watchlist: 3 Global Stocks",
+    "name": "QAF Limited",
+    "news_keyword": "QAF Limited"
+  },
+  {
+    "symbol": "LJ3.SI",
+    "market": "SGX",
+    "added": "2026-08-15",
+    "note": "From TradingView watchlist: 3 Global Stocks",
+    "name": "OUE Limited",
+    "news_keyword": "OUE Limited"
+  },
+  {
+    "symbol": "C6L.SI",
+    "market": "SGX",
+    "added": "2026-08-15",
+    "note": "From TradingView watchlist: 3 Global Stocks",
+    "name": "Singapore Airlines",
+    "news_keyword": "Singapore Airlines"
+  },
+  {
+    "symbol": "ES3.SI",
+    "market": "SGX",
+    "added": "2026-08-15",
+    "note": "From TradingView watchlist: 3 Global Stocks (STI ETF)",
+    "name": "SPDR Straits Times Index ETF",
+    "news_keyword": "Straits Times Index ETF"
+  },
+  {
+    "symbol": "N01.SI",
+    "market": "SGX",
+    "added": "2026-08-15",
+    "note": "From TradingView watchlist: 3 Global Stocks",
+    "name": "NeraTel",
+    "news_keyword": "NeraTel"
+  },
+  {
+    "symbol": "S08.SI",
+    "market": "SGX",
+    "added": "2026-08-15",
+    "note": "From TradingView watchlist: 3 Global Stocks",
+    "name": "Singapore Post",
+    "news_keyword": "Singapore Post"
+  },
+  {
+    "symbol": "S58.SI",
+    "market": "SGX",
+    "added": "2026-08-15",
+    "note": "From TradingView watchlist: 3 Global Stocks",
+    "name": "SATS Ltd",
+    "news_keyword": "SATS",
+    "news_exclude": "Strive|Preferred|ASST|Bitcoin"
+  },
+  {
+    "symbol": "H22.SI",
+    "market": "SGX",
+    "added": "2026-08-15",
+    "note": "From TradingView watchlist: 3 Global Stocks",
+    "name": "Hong Leong Asia",
+    "news_keyword": "Hong Leong Asia"
+  },
+  {
+    "symbol": "OV8.SI",
+    "market": "SGX",
+    "added": "2026-08-15",
+    "note": "From TradingView watchlist: 3 Global Stocks",
+    "name": "Sheng Siong Group",
+    "news_keyword": "Sheng Siong"
+  },
+  {
+    "symbol": "5ML.SI",
+    "market": "SGX",
+    "added": "2026-08-15",
+    "note": "From TradingView watchlist: 3 Global Stocks",
+    "name": "Old Chang Kee",
+    "news_keyword": "Old Chang Kee"
+  },
+  {
+    "symbol": "BS6.SI",
+    "market": "SGX",
+    "added": "2026-08-15",
+    "note": "From TradingView watchlist: 3 Global Stocks",
+    "name": "Yangzijiang Shipbuilding",
+    "news_keyword": "Yangzijiang Shipbuilding"
+  },
+  {
+    "symbol": "5TP.SI",
+    "market": "SGX",
+    "added": "2026-08-15",
+    "note": "From TradingView watchlist: 3 Global Stocks",
+    "name": "CNMC Goldmine Holdings",
+    "news_keyword": "CNMC Goldmine"
+  },
+  {
+    "symbol": "544.SI",
+    "market": "SGX",
+    "added": "2026-08-15",
+    "note": "From TradingView watchlist: 3 Global Stocks",
+    "name": "CSE Global",
+    "news_keyword": "CSE Global"
+  },
+  {
+    "symbol": "CFA.SI",
+    "market": "SGX",
+    "added": "2026-08-15",
+    "note": "From TradingView watchlist: 3 Global Stocks",
+    "name": "Amova-Straits Trading Asia ex Japan REIT Index ETF",
+    "news_keyword": "Straits Trading Asia ex Japan REIT"
+  },
+  {
+    "symbol": "BN4.SI",
+    "market": "SGX",
+    "added": "2026-08-15",
+    "note": "From TradingView watchlist: 3 Global Stocks",
+    "name": "Keppel Ltd",
+    "news_keyword": "Keppel"
+  },
+  {
+    "symbol": "S68.SI",
+    "market": "SGX",
+    "added": "2026-08-15",
+    "note": "From TradingView watchlist: 3 Global Stocks",
+    "name": "Singapore Exchange",
+    "news_keyword": "Singapore Exchange"
+  },
+  {
+    "symbol": "SCY.SI",
+    "market": "SGX",
+    "added": "2026-08-15",
+    "note": "From TradingView watchlist: 3 Global Stocks",
+    "name": "CSOP STAR and ChiNext 50 ETF",
+    "news_keyword": "CSOP STAR ChiNext 50"
+  },
+  {
+    "symbol": "Z74.SI",
+    "market": "SGX",
+    "added": "2026-08-15",
+    "note": "From TradingView watchlist: 3 Global Stocks",
+    "name": "Singtel",
+    "news_keyword": "Singtel"
+  },
+  {
+    "symbol": "LHST.SI",
+    "market": "SGX",
+    "added": "2026-08-15",
+    "note": "From TradingView watchlist: 3 Global Stocks (Lion-OCBC Securities HSTECH ETF, iNAV ticker)",
+    "name": "Lion-OCBC Securities Hang Seng TECH ETF",
+    "news_keyword": "Lion-OCBC Hang Seng TECH ETF"
+  }
+]
