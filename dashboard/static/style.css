@@ -696,3 +696,9 @@ select, input[type=date], input.txt { border-radius: 0; background: #000; paddin
   .topbar, main, .tape { transition: width .15s ease, margin-left .15s ease; }
 }
 @media (prefers-reduced-motion: reduce) { .topbar, main, .tape { transition: none; } }
+
+.tape .it.fed { cursor: pointer; }
+.tape .it.fed b { color: #000; background: var(--hawk); padding: 0 4px; font-size: 10px; letter-spacing: .5px; }
+.tape .it.fed .ar { color: var(--text); font-weight: 700; }
+.tape .it.fed.hot .ar { color: var(--hawk); }
+.tape .it.fed:hover { background: var(--surface-2); }

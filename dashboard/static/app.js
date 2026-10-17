@@ -1443,10 +1443,20 @@ function tickClock() {
   }));
 }
 const TAPE_PX_PER_SEC = 50;
+let tapeFed = null;  // FedWatch can be slow when OpenD is cold, so the tape renders without it and re-renders when it lands
+async function loadTapeFed(force = false, bypass = false) {  // force: make the server re-pull (↻); bypass: just skip the browser cache
+  const fw = await api('/api/fedwatch' + (force ? '?refresh=1' : ''), { fresh: force || bypass });
+  if (fw && fw.meetings && fw.meetings.length) { tapeFed = fw; renderTape(); }
+}
 async function renderTape() {
   const rows = sigRows().filter(r => r.dir === 'bull' || r.dir === 'bear').slice(0, 40);
   const news = await api('/api/news');
   const items = [];
+  for (const m of (tapeFed ? tapeFed.meetings : []).slice(0, 2)) {
+    items.push(h('span', { class: `it fed ${m.hike >= 50 ? 'hot' : ''}`, dataset: { go: 'calendar' }, title: m.ranges.map(r => `${r.range}: ${r.p}%`).join('\n') },
+      h('b', null, 'FED'), h('span', null, `FOMC ${m.date.slice(5)}`),
+      h('span', { class: 'ar' }, `${m.hike.toFixed(1)}% hike`), h('span', { class: 'tm' }, `${m.hold.toFixed(1)}% hold · ${m.move_bp >= 0 ? '+' : ''}${m.move_bp}bp`)));
+  }
   const heads = ((news && news.market) || []).slice(0, 14);
   const headline = n => h('a', { class: 'it news', href: n.url, target: '_blank', rel: 'noopener noreferrer', title: n.title },
     h('b', null, 'NEWS'), h('span', { class: 'hd' }, n.title.length > 95 ? n.title.slice(0, 94) + '…' : n.title),
@@ -1473,6 +1483,7 @@ const NEWS_POLL_MS = 5 * 60 * 1000;
 let newsPolledAt = Date.now();
 async function pollNews() {
   newsPolledAt = Date.now();
+  loadTapeFed(false, true);  // local read of the server's cached FedWatch copy; re-renders the tape only via renderTape()
   const prev = await api('/api/news');
   const next = await api('/api/news', { fresh: true });
   if (!next || !next.fetchedAt || (prev && prev.fetchedAt === next.fetchedAt)) return;
@@ -1520,6 +1531,8 @@ function wire() {
   document.addEventListener('click', e => {
     const s = e.target.closest('[data-sym]');
     if (s) { e.preventDefault(); openSymbol(s.dataset.sym); return; }
+    const g = e.target.closest('[data-go]');
+    if (g) { e.preventDefault(); go(g.dataset.go); return; }
     const d = e.target.closest('[data-doc]');
     if (d) { e.preventDefault(); openDoc(d.dataset.doc, d.textContent); return; }
     const img = e.target.closest('img[data-full]');
@@ -1593,7 +1606,7 @@ function wire() {
     S.meta = await api('/api/meta');
     cache['/api/news'] = Promise.resolve(await api('/api/news?refresh=1', { fresh: true }));
     await loadSignals(true);
-    fillSymbols(); renderTape(); render(); toast('Wiki + alert sheet reloaded');
+    fillSymbols(); renderTape(); render(); loadTapeFed(true); toast('Wiki + alert sheet reloaded');
   });
   $('#themeBtn').addEventListener('click', () => {
     const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
@@ -1623,7 +1636,7 @@ function fillSymbols() {
   if (hash.startsWith('sym=')) openSymbol(decodeURIComponent(hash.slice(4)));
   // the alert sheet takes a few seconds on first load; render again once it lands
   await loadSignals();
-  fillSymbols(); renderTape();
+  fillSymbols(); renderTape(); loadTapeFed();
   if (['desk', 'signals'].includes(S.view)) render();
   setInterval(pollNews, NEWS_POLL_MS);
   document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - newsPolledAt > NEWS_POLL_MS) pollNews(); });
