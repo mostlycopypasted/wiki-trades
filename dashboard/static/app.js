@@ -337,7 +337,7 @@ async function viewDesk(root) {
     { aria: use4h ? 'Currency strength 4H history' : 'Currency strength history', tipLabel: i => use4h ? H[i].when : niceDate(H[i].date) });
 
   // signal flow + latest setups
-  const fd = F('desk', { flow: '1H' });
+  const fd = fcs;  // F() builds a new object each call, so a second F('desk') would orphan fcs and the 4H toggle would never stick
   const flowCard = card('Signal flow · 14 days', seg([{ v: '1H', label: '1H' }, { v: '4H', label: '4H' }, { v: 'D', label: 'Daily' }, { v: 'STK', label: 'Stocks' }],
     fd.flow, v => { fd.flow = v; saveFilters(); render(); }));
   const fbox = h('div'); flowCard.appendChild(fbox);
