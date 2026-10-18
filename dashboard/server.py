@@ -160,6 +160,7 @@ ROUTES = {
     "/api/signals": api_signals,
     "/api/brief": api_brief,
     "/api/strength-history": lambda q: W.strength_history(),
+    "/api/strength-4h": lambda q: W.strength_4h(),
     "/api/calendar": lambda q: W.parse_calendar(),
     "/api/cb": lambda q: W.parse_cb_tally(),
     "/api/tat": api_tat,

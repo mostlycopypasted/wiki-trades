@@ -72,7 +72,7 @@ def get_alert(symbol_entry):
     return matches[-1] if matches else ""
 
 
-def build(brief_path, target_date):
+def build(brief_path, target_date, out_dir=None):
     data = load_brief_json(brief_path)
     out = []
     for entry in data["symbols_scanned"]:
@@ -86,7 +86,7 @@ def build(brief_path, target_date):
             "alert": get_alert(entry),
         })
 
-    out_dir = Path.home() / "tradingview-mcp" / "daily_brief"
+    out_dir = Path(out_dir) if out_dir else Path.home() / "tradingview-mcp" / "daily_brief"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{target_date}.json"
     out_path.write_text(json.dumps(out, indent=2), encoding="utf-8")
@@ -102,8 +102,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("brief_json", help="Path to captured `tv brief` stdout")
     parser.add_argument("--date", default=datetime.datetime.now().strftime("%Y-%m-%d"))
+    parser.add_argument("--out-dir", default=None,
+                        help="Output directory (default ~/tradingview-mcp/daily_brief); the 4H currency-strength scan uses ~/tradingview-mcp/4H_brief")
     args = parser.parse_args()
-    build(args.brief_json, args.date)
+    build(args.brief_json, args.date, args.out_dir)
 
 
 if __name__ == "__main__":

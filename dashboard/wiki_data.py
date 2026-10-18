@@ -31,6 +31,7 @@ SOURCES_DIR = WIKI / "sources"
 CAL_FILE = WIKI / "notes" / "economic-calendar.md"
 CB_FILE = WIKI / "notes" / "central-bank-tally.md"
 CS_FILE = WIKI / "notes" / "currency-strength.md"
+CS4H_FILE = WIKI / "notes" / "currency-strength-4h.md"
 
 SGT = dt.timezone(dt.timedelta(hours=8))
 
@@ -340,6 +341,47 @@ def strength_history():
         if scores:
             hist.append({"date": date, "scores": {s["ccy"]: s["score"] for s in scores}})
     return hist
+
+
+def _int(v):
+    try:
+        return int(str(v).replace("+", "").replace("\u2212", "-").strip())
+    except ValueError:
+        return None
+
+
+def strength_4h():
+    """4H currency strength, parsed from wiki/notes/currency-strength-4h.md
+    (written by scripts/tat_currency_strength_4h.py). Returns None before the first scan."""
+    md = read(CS4H_FILE)
+    if not md:
+        return None
+    readings = find_section(md, "Latest Readings")
+    m = re.search(r"Latest Readings \((\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2}) SGT\)", md)
+    scores = []
+    for r in table_with(readings, "Currency"):
+        s4 = _int(r.get("4H Score", ""))
+        if s4 is None:
+            continue
+        scores.append({"ccy": clean_inline(r.get("Currency", "")), "score": s4, "bias": r.get("4H Trend Bias", ""),
+                       "daily": _int(r.get("Daily Score", ""))})
+    hist = []
+    for r in table_with(find_section(md, "Recent Scans"), "Scan"):
+        t = re.match(r"(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})", r.get("Scan (SGT)", ""))
+        if not t:
+            continue
+        sc = {k: _int(v) for k, v in r.items() if not k.startswith("Scan")}
+        hist.append({"label": "%s/%s %sh" % (t.group(2), t.group(3), t.group(4)),
+                     "when": "%s-%s-%s %s:%s SGT" % t.groups(), "scores": sc})
+    hist.reverse()   # the note lists newest first
+    cos = table_with(find_section(md, "Change of Structure"), "Pair")
+    return {
+        "date": m.group(1) if m else "", "time": "%s:%s" % (m.group(2), m.group(3)) if m else "",
+        "path": str(CS4H_FILE.relative_to(WIKI)),
+        "scores": scores, "history": hist, "pairs": _suggested_pairs(md),
+        "cos": [{"sym": clean_inline(r.get("Pair", "")), "prev": r.get("Previous Structure", ""),
+                 "cur": r.get("Current Structure", "")} for r in cos],
+    }
 
 
 # ---------------------------------------------------------------- sentiment

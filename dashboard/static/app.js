@@ -275,8 +275,8 @@ function alignment(state) {
 
 // ============================================================ views: DESK
 async function viewDesk(root) {
-  const [brief, hist, cal, cb, tat, ahh, news] = await Promise.all([
-    api('/api/brief'), api('/api/strength-history'), api('/api/calendar'), api('/api/cb'), api('/api/tat-latest'), api('/api/ahh'), api('/api/news'),
+  const [brief, hist, cal, cb, tat, ahh, news, cs4] = await Promise.all([
+    api('/api/brief'), api('/api/strength-history'), api('/api/calendar'), api('/api/cb'), api('/api/tat-latest'), api('/api/ahh'), api('/api/news'), api('/api/strength-4h'),
   ]);
   const q = S.q, rows = sigRows(), today = sgtToday();
   const tfRows = rows.filter(r => ['1H', '4H', 'D'].includes(r.src));
@@ -316,18 +316,25 @@ async function viewDesk(root) {
   const put = (el, span) => { el.classList.add(span); dg.appendChild(el); return el; };
   const nCard = put(newsCard(news), 'span-7'); nCard.classList.add('scroll');
 
-  // currency strength + trend
-  const csCard = card('Currency strength', brief ? `Daily brief ${brief.date}` : '');
-  const trendCard = card('Strength trend', hist ? `${Math.min(hist.length, 25)} briefs` : '');
+  // currency strength + trend (Daily brief, or the 4H scan from scripts/tat_currency_strength_4h.py)
+  const fcs = F('desk', { flow: '1H', cs: 'D' });
+  const use4h = fcs.cs === '4H' && cs4 && cs4.scores && cs4.scores.length;
+  const csToggle = cs4 ? seg([{ v: 'D', label: 'Daily' }, { v: '4H', label: '4H' }], use4h ? '4H' : 'D', v => { fcs.cs = v; saveFilters(); render(); }) : '';
+  const csScores = use4h ? cs4.scores : scores;
+  const csCard = card('Currency strength', csToggle);
+  csCard.appendChild(h('div', { class: 'small muted', style: { marginBottom: '6px' } },
+    use4h ? `4H scan ${niceDate(cs4.date)} ${cs4.time} SGT` : (brief ? `Daily brief ${brief.date}` : '')));
+  const H = use4h ? cs4.history.slice(-25) : (hist || []).slice(-25);
+  const trendCard = card('Strength trend', use4h ? `${H.length} 4H scan${H.length === 1 ? '' : 's'}` : (hist ? `${Math.min(hist.length, 25)} briefs` : ''));
   const csBox = h('div'); csCard.appendChild(csBox);
-  Charts.diverging(csBox, scores.map(s => ({ label: s.ccy, value: s.score, tip: s.bias })), {
-    aria: 'Currency strength scores', onClick: d => { setQuery(d.label); go('signals'); },
+  Charts.diverging(csBox, csScores.map(s => ({ label: s.ccy, value: s.score, tip: use4h && s.daily != null ? `${s.bias} · Daily ${s.daily > 0 ? '+' : ''}${s.daily}` : s.bias })), {
+    aria: use4h ? 'Currency strength 4H scores' : 'Currency strength scores', onClick: d => { setQuery(d.label); go('signals'); },
   });
   csCard.appendChild(h('div', { class: 'small muted', style: { marginTop: '6px' } }, 'Click a currency to see its TAT signals.'));
-  const H = (hist || []).slice(-25);
   const tBox = h('div'); trendCard.appendChild(tBox);
-  Charts.lines(tBox, H.map(x => shortDate(x.date)), CCY_ORDER.map(c => ({ name: c, color: CCY_COLOR[c], values: H.map(x => x.scores[c] ?? null) })),
-    { aria: 'Currency strength history', tipLabel: i => niceDate(H[i].date) });
+  if (use4h && H.length < 2) tBox.appendChild(empty('Trend appears after a second 4H scan'));
+  else Charts.lines(tBox, H.map(x => use4h ? x.label : shortDate(x.date)), CCY_ORDER.map(c => ({ name: c, color: CCY_COLOR[c], values: H.map(x => x.scores[c] ?? null) })),
+    { aria: use4h ? 'Currency strength 4H history' : 'Currency strength history', tipLabel: i => use4h ? H[i].when : niceDate(H[i].date) });
 
   // signal flow + latest setups
   const fd = F('desk', { flow: '1H' });
