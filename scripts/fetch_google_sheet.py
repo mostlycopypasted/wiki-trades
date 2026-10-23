@@ -66,6 +66,10 @@ def fetch_with_service_account(timeframe="H1"):
     print(f"🔑 Using service account credentials from: {cred_file}")
     import gspread
     gc = gspread.service_account(filename=str(cred_file))
+    try:
+        gc.set_timeout(30)  # gspread has no default timeout; a stalled socket would otherwise hang the caller forever
+    except AttributeError:
+        pass
     
     spreadsheet = gc.open_by_key(SHEET_ID)
     worksheet = spreadsheet.get_worksheet_by_id(int(gid))

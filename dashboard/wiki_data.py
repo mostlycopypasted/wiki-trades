@@ -545,6 +545,56 @@ def _mywl_file_gallery():
     return None
 
 
+MYWL_JSON = Path.home() / "tradingview-mcp" / "my_watchlist.json"   # the sweep's own source of truth (capture_watchlist_charts.py)
+_MYWL_ENTRY = re.compile(r"^(?:[A-Z0-9_]{1,12}:)?[A-Z0-9._-]{1,20}$")
+_mywl_lock = threading.Lock()
+
+
+def _bare(entry):
+    return entry.split(":", 1)[-1].upper()
+
+
+def my_watchlist_symbols():
+    try:
+        return [_bare(e) for e in json.loads(MYWL_JSON.read_text(encoding="utf-8")).get("watchlist", [])]
+    except (OSError, ValueError):
+        return []
+
+
+def my_watchlist_edit(action, sym, prefix=""):
+    """Add or remove one instrument in my_watchlist.json, so the next scheduled 4H sweep picks it up.
+
+    The file is read-modify-written whole (keeping default_timeframe/layout/notes) and swapped in atomically.
+    Returns (ok, message).
+    """
+    sym = str(sym or "").upper().strip()
+    prefix = str(prefix or "").upper().strip()
+    entry = "%s:%s" % (prefix, sym) if prefix else sym
+    if not _MYWL_ENTRY.match(entry):
+        return False, "invalid symbol"
+    with _mywl_lock:
+        try:
+            data = json.loads(MYWL_JSON.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            return False, "cannot read my_watchlist.json: %s" % e
+        wl = data.setdefault("watchlist", [])
+        have = [i for i, e in enumerate(wl) if _bare(e) == sym]
+        if action == "add":
+            if have:
+                return True, "%s already in watchlist" % sym
+            wl.append(entry)
+        elif action == "remove":
+            if not have:
+                return True, "%s not in watchlist" % sym
+            wl[:] = [e for e in wl if _bare(e) != sym]
+        else:
+            return False, "unknown action"
+        tmp = MYWL_JSON.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        os.replace(tmp, MYWL_JSON)
+    return True, "%s %s" % (sym, "added" if action == "add" else "removed")
+
+
 def my_watchlist_gallery():
     """Newest My-Watchlist 4H sweep: the dedicated my_watchlist/ files, or a TAT report section, whichever is later."""
     tat = _tat_watchlist_gallery()
@@ -911,6 +961,7 @@ SHEET_TABS = [  # (key in fetch_google_sheet.GIDS, dashboard source id, label)
     ("BATS", "BATS", "TV Stocks (bats)"), ("BULL", "YBULL", "Yahoo Bull D"), ("BEAR", "YBEAR", "Yahoo Bear D"),
 ]
 SHEET_TTL = 300
+SHEET_HUNG = 180  # seconds before a refresh in flight is presumed hung and abandoned
 
 
 def _norm_date(s):
@@ -951,9 +1002,12 @@ class SheetCache:
         self.fetched_at = None
         self.error = None
         self.loading = False
+        self.loading_since = 0.0
         self.tab_counts = {}
 
     def get(self, force=False):
+        if self.loading and time.time() - self.loading_since > SHEET_HUNG:  # a hung fetch must not block refreshes forever
+            self.loading = False
         stale = self.fetched_at is None or (time.time() - self.fetched_at) > SHEET_TTL
         if (force or stale) and not self.loading:
             if self.fetched_at is None or force:
@@ -967,6 +1021,7 @@ class SheetCache:
             if self.loading:
                 return
             self.loading = True
+            self.loading_since = time.time()
         try:
             sys.path.insert(0, str(ROOT))
             from scripts.fetch_google_sheet import fetch_with_service_account  # noqa

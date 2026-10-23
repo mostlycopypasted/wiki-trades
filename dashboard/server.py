@@ -175,6 +175,7 @@ ROUTES = {
     "/api/fedwatch": lambda q: FED.fedwatch(refresh=q.get("refresh") == "1"),
     "/api/news": lambda q: NEWS.news(refresh=q.get("refresh") == "1"),
     "/api/my-watchlist": lambda q: W.my_watchlist_gallery(),
+    "/api/my-watchlist/config": lambda q: {"symbols": W.my_watchlist_symbols()},
     "/api/performance": lambda q: ST.performance(account=q.get("account", "all"), since=q.get("since"),
                                                  refresh=q.get("refresh") == "1"),
 }
@@ -215,13 +216,16 @@ class Handler(BaseHTTPRequestHandler):
         # so other sites open in the same browser can't post to the journal
         if self.headers.get("X-Desk") != "1":
             return self.send_json({"ok": False, "error": "forbidden"}, 403)
-        if not url.path.startswith("/api/journal/"):
+        if not (url.path.startswith("/api/journal/") or url.path in ("/api/my-watchlist/add", "/api/my-watchlist/remove")):
             return self.send_error(404)
         try:
             n = int(self.headers.get("Content-Length") or 0)
             if n > 100_000:
                 return self.send_json({"ok": False, "error": "too large"}, 413)
             data = json.loads(self.rfile.read(n) or b"{}")
+            if url.path.startswith("/api/my-watchlist/"):
+                ok, msg = W.my_watchlist_edit(url.path.rsplit("/", 1)[1], data.get("sym"), data.get("prefix"))
+                return self.send_json({"ok": ok, "message": msg, "symbols": W.my_watchlist_symbols()}, 200 if ok else 400)
             res, status = run_journal(url.path[len("/api/journal/"):], data)
             self.send_json(res, status)
         except Exception as e:

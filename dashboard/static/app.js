@@ -114,10 +114,12 @@ function updateSheetStatus() {
   if (!st) { dot.className = 'dot busy'; lbl.textContent = 'Loading alerts…'; return; }
   if (st.loading && !st.fetchedAt) { dot.className = 'dot busy'; lbl.textContent = 'Loading alerts…'; return; }
   if (st.error && !st.rows) { dot.className = 'dot err'; lbl.textContent = 'Sheet unavailable'; dot.title = st.error; return; }
-  dot.className = st.error ? 'dot err' : 'dot ok';
+  const ageMin = st.fetchedAt ? (Date.now() / 1000 - st.fetchedAt) / 60 : 0;
+  const stale = ageMin > 20;  // server refreshes every 5 min, so 20+ means refreshes are failing or hung
+  dot.className = st.error || stale ? 'dot err' : 'dot ok';
   const t = st.fetchedAt ? new Date(st.fetchedAt * 1000).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Singapore' }) : '—';
-  lbl.textContent = `${st.rows.toLocaleString()} alerts · ${t} SGT`;
-  dot.title = st.error || `Tabs: ${Object.entries(st.tabs || {}).map(([k, v]) => `${k} ${v}`).join(', ')}`;
+  lbl.textContent = `${st.rows.toLocaleString()} alerts · ${t} SGT${stale ? ' · STALE' : ''}`;
+  dot.title = st.error || (stale ? `Last successful fetch ${Math.round(ageMin)} min ago` : null) || `Tabs: ${Object.entries(st.tabs || {}).map(([k, v]) => `${k} ${v}`).join(', ')}`;
 }
 const sigRows = () => (S.sig && S.sig.rows) || [];
 
@@ -901,22 +903,35 @@ async function viewBrief(root) {
 
 // ============================================================ views: MY WATCHLIST
 async function viewMyWatchlist(root) {
-  const g = await api('/api/my-watchlist');
+  const [g, cfg] = await Promise.all([api('/api/my-watchlist'), api('/api/my-watchlist/config', { fresh: true })]);
   root.replaceChildren(h('div', { class: 'view-head' }, h('h1', null, 'My Watchlist'),
     h('span', { class: 'sub' }, g && g.date ? `4H screenshot sweep · ${g.date}${g.time ? ' · ' + g.time + ' SGT run' : ''}` : '')));
-  if (!g || !g.entries.length) {
-    root.appendChild(empty('No my-watchlist screenshots captured yet — this populates after the next scheduled 4H run (06:15/09:01/13:01/17:01/21:01 SGT).'));
+  const syms = cfg ? cfg.symbols : ((g && g.entries) || []).map(e => e.sym);
+  if (!syms.length) {
+    root.appendChild(empty('Watchlist is empty — open an instrument from Signals and use ＋ Watchlist.'));
     return;
   }
+  const shots = Object.fromEntries(((g && g.entries) || []).map(e => [e.sym, e]));
   const q = S.q;
-  const entries = g.entries.filter(e => matches(q, e.sym));
-  root.appendChild(card('4H chart screenshots', `${entries.length} of ${g.entries.length}`,
-    entries.length ? h('div', { class: 'wgrid' }, entries.map(e => h('div', { class: 'wcard' },
-      e.img ? h('img', { src: '/images/' + e.img, loading: 'lazy', alt: `${e.sym} 4H chart`, dataset: { full: '/images/' + e.img, cap: `${e.sym} · 4H · ${g.date}` } }) : h('div', { class: 'empty' }, 'No chart'),
-      h('div', { class: 'wb' }, symChip(e.sym))))) : empty('Nothing matches')));
+  const list = syms.filter(sym => matches(q, sym));
+  const rm = async sym => { if ((await watchlistEdit('remove', sym)).ok) render(); };
+  root.appendChild(card('4H chart screenshots', `${list.length} of ${syms.length}`,
+    list.length ? h('div', { class: 'wgrid' }, list.map(sym => { const e = shots[sym]; return h('div', { class: 'wcard' },
+      e && e.img ? h('img', { src: '/images/' + e.img, loading: 'lazy', alt: `${sym} 4H chart`, dataset: { full: '/images/' + e.img, cap: `${sym} · 4H · ${g.date}` } }) : h('div', { class: 'empty' }, 'Chart appears after the next 4H sweep'),
+      h('div', { class: 'wb' }, symChip(sym), h('button', { class: 'iconbtn', style: { marginLeft: 'auto' }, title: `Remove ${sym} from watchlist`, onclick: () => rm(sym) }, '✕'))); })) : empty('Nothing matches')));
 }
 
 // ============================================================ instrument drawer
+function wlButton(sym, row, inList) {
+  const b = h('button', { class: 'btn', style: { marginLeft: '6px' }, title: 'my_watchlist.json — included in the next scheduled 4H sweep' }, inList ? '✓ In watchlist' : '＋ Watchlist');
+  b.addEventListener('click', async () => {
+    b.disabled = true;
+    const res = await watchlistEdit(inList ? 'remove' : 'add', sym, watchlistPrefix(row));
+    b.disabled = false;
+    if (res.ok) { inList = !inList; b.textContent = inList ? '✓ In watchlist' : '＋ Watchlist'; if (S.view === 'my-watchlist') render(); }
+  });
+  return b;
+}
 const TV_LAYOUT = 'https://www.tradingview.com/chart/3Jax65FF/';
 
 // Open the saved TradingView layout on this instrument, with the same exchange prefix the alerts use.
@@ -928,6 +943,20 @@ function tradingViewUrl(sym, row, interval = 'D') {
   const intParam = interval ? `&interval=${encodeURIComponent(interval)}` : '';
   return `${TV_LAYOUT}?symbol=${symParam}${intParam}`;
 }
+// my_watchlist.json prefix for a symbol, same exchange rules as tradingViewUrl (the 4H sweep resolves it through TradingView)
+function watchlistPrefix(row) {
+  let exch = row ? row.exch : '';
+  if (exch === 'US') exch = '';
+  else if (!exch && (!row || row.cls !== 'Stock')) exch = 'EIGHTCAP';
+  return exch;
+}
+async function watchlistEdit(action, sym, prefix = '') {
+  const res = await fetch('/api/my-watchlist/' + action, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Desk': '1' }, body: JSON.stringify({ sym, prefix }) })
+    .then(r => r.json()).catch(() => ({ ok: false, message: 'Server unreachable' }));
+  toast(res.message || (res.ok ? 'Saved' : 'Failed'));
+  if (res.ok) { delete cache['/api/my-watchlist/config']; delete cache['/api/my-watchlist']; }
+  return res;
+}
 async function openSymbol(sym) {
   sym = (sym || '').toUpperCase().trim();
   if (!sym) return;
@@ -938,9 +967,10 @@ async function openSymbol(sym) {
   $('#drawer').classList.add('show'); $('#scrim').classList.add('show');
   if (location.hash.startsWith('#sym=')) history.replaceState(null, '', `#${S.view}`);
 
-  const [imgs, ahh, brief, cal, sent, entity, journal] = await Promise.all([
+  const [imgs, ahh, brief, cal, sent, entity, journal, wlCfg] = await Promise.all([
     api('/api/images?sym=' + encodeURIComponent(sym)), api('/api/ahh'), api('/api/brief'), api('/api/calendar'), api('/api/sentiment'),
     api('/api/doc?path=' + encodeURIComponent(`entities/${sym.toLowerCase()}.md`)), api('/api/journal'),
+    api('/api/my-watchlist/config', { fresh: true }),
   ]);
   const tatDates = ((S.meta && S.meta.tat) || []).slice(0, 2);
   const reps = await Promise.all(tatDates.map(d => api('/api/tat?date=' + d)));
@@ -952,6 +982,7 @@ async function openSymbol(sym) {
     ...[cls, ...symCurrencies(sym)].filter(Boolean).map(t => h('span', { class: 'tag' }, t)),
     entity ? h('a', { class: 'small', style: { cursor: 'pointer', marginLeft: '6px' }, onclick: () => openDoc(entity.path, sym) }, 'Wiki page ↗') : null,
     h('a', { class: 'small', href: tradingViewUrl(sym, rows[0], 'D'), target: '_blank', rel: 'noopener', style: { marginLeft: '6px' } }, 'TradingView ↗'),
+    wlCfg ? wlButton(sym, rows[0], wlCfg.symbols.includes(sym)) : null,
   ].filter(Boolean);
   $('#dTags').replaceChildren(...tagKids);
   const out = [];
