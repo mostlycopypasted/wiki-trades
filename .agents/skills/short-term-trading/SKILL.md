@@ -77,5 +77,5 @@ Whenever executing the D-R-H-R Short-Term Trading Framework, **MUST use the Trad
 ---
 
 ## 📄 Source Reference
-- **Transcript**: [raw/Short-term trading with high profit potential.md](file:///Users/chriseah/obsidian/wiki-trades/raw/Short-term%20trading%20with%20high%20profit%20potential.md)
+- **Transcript**: [raw/Short-term trading with high profit potential.md](file:///Users/chriseah/obsidian/wiki-trades/raw/archives/Short-term%20trading%20with%20high%20profit%20potential.md)
 - **Concept Page**: [wiki/concepts/retest-execution.md](file:///Users/chriseah/obsidian/wiki-trades/wiki/concepts/retest-execution.md)

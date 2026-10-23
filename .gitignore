@@ -7,3 +7,6 @@ __pycache__/
 *.pyo
 *.pyd
 .env
+
+# dashboard: statement-log snapshot (Performance tab)
+/dashboard/cache/
