@@ -324,8 +324,8 @@ async function viewDesk(root) {
   const csCard = card('Currency strength', csToggle);
   csCard.appendChild(h('div', { class: 'small muted', style: { marginBottom: '6px' } },
     use4h ? `4H scan ${niceDate(cs4.date)} ${cs4.time} SGT` : (brief ? `Daily brief ${brief.date}` : '')));
-  const H = use4h ? cs4.history.slice(-25) : (hist || []).slice(-25);
-  const trendCard = card('Strength trend', use4h ? `${H.length} 4H scan${H.length === 1 ? '' : 's'}` : (hist ? `${Math.min(hist.length, 25)} briefs` : ''));
+  const H = use4h ? cs4.history.slice(-30) : (hist || []).slice(-30);
+  const trendCard = card('Strength trend', use4h ? `${H.length} 4H scan${H.length === 1 ? '' : 's'}` : (hist ? `${Math.min(hist.length, 30)} briefs` : ''));
   const csBox = h('div'); csCard.appendChild(csBox);
   Charts.diverging(csBox, csScores.map(s => ({ label: s.ccy, value: s.score, tip: use4h && s.daily != null ? `${s.bias} · Daily ${s.daily > 0 ? '+' : ''}${s.daily}` : s.bias })), {
     aria: use4h ? 'Currency strength 4H scores' : 'Currency strength scores', onClick: d => { setQuery(d.label); go('signals'); },

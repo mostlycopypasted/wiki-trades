@@ -47,6 +47,7 @@ BRIEF_DIR = MCP_DIR / "4H_brief"
 RULES_PATH = MCP_DIR / "forex_list.json"
 SNAPSHOT_RE = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{4}$")
 CHART_SNAPSHOTS = 10   # x-axis labels get crowded beyond this
+TABLE_SNAPSHOTS = 30   # Recent Scans rows; the dashboard's Strength trend card reads these
 
 
 def scan(snapshot_key):
@@ -182,7 +183,7 @@ def write_note(keys, history, data, major_pairs):
         "| Scan (SGT) | " + " | ".join(CURRENCIES) + " |",
         "| :--- |" + " :---: |" * len(CURRENCIES),
     ]
-    for k in reversed(keys[-CHART_SNAPSHOTS:]):
+    for k in reversed(keys[-TABLE_SNAPSHOTS:]):
         lines.append(f"| {pretty(k)} | " + " | ".join(f"{history[k][c]:+d}" for c in CURRENCIES) + " |")
 
     lines += [
