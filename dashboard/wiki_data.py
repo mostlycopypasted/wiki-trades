@@ -16,6 +16,7 @@ import time
 import datetime as dt
 import json
 import urllib.request
+import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -783,7 +784,24 @@ def parse_calendar():
                            "forecast": r.get("Forecast", "").strip(), "previous": r.get("Previous", "").strip(),
                            "actual": "" if actual in ("—", "-") else actual,
                            "url": link.group(1) if link else "", "week": week})
-    fill_actuals(events)
+    # Forex Factory's own calendar page (scripts/scrape_forexfactory.py, read through ego-browser) is the source for
+    # all impact levels, actuals and next week, and replaces the note's rows for the weeks it covers. The note is
+    # Red Folder only and its next week comes from TradingView; when the scrape is stale or missing fall back to
+    # the note plus the Forex Factory XML feed for Medium/Low.
+    ff = ff_scraped()
+    scraped = {w: ff["weeks"].get(w) for w in ("this", "next")} if ff else {}
+    for w, evs in scraped.items():
+        if evs:
+            events[:] = [e for e in events if e["week"] != w] + [dict(e, week=w) for e in evs]
+    if not scraped.get("this"):
+        fill_actuals(events)
+        extra = [c for c in ff_events("thisweek") if c["impact"] != "High"]
+        matched = {id(c) for _, c in match_events(events, extra)}
+        extra = [dict(c, week="this") for c in extra if id(c) not in matched]
+        fill_actuals(extra)
+        events += extra
+    if ff and ff["weeks"].get("last") and not any(e["week"] == "last" for e in events):
+        events += [dict(e, week="last") for e in ff["weeks"]["last"]]
     # pull_economic_calendar.py now writes a Last Week Results section; older notes lack it, so fall back
     # to fetching last week straight from TradingView.
     if this_start and not any(e["week"] == "last" for e in events):
@@ -852,6 +870,57 @@ def tv_events(start, end):
         _tv_cache[key] = (time.time(), out)
     except Exception:
         _tv_cache[key] = (time.time() - ttl + 300, hit[1] if hit else [])  # back off 5 min, keep any old copy
+        return hit[1] if hit else []
+    return out
+
+
+FF_CACHE = ROOT / "dashboard" / "cache" / "ff_calendar.json"
+FF_SCRAPE_MAX_AGE = 12 * 3600   # a scrape older than this is ignored (the scheduled job has stopped working)
+FF_URL = "https://nfs.faireconomy.media/ff_calendar_%s.xml"
+_ff_cache = {}
+
+
+def ff_scraped():
+    """scripts/scrape_forexfactory.py's output as {'weeks': {'this': [...], 'next': [...], 'last': [...]}}, or None if absent/stale."""
+    try:
+        d = json.loads(FF_CACHE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if time.time() - d.get("fetchedAt", 0) > FF_SCRAPE_MAX_AGE:
+        return None
+    for evs in d.get("weeks", {}).values():
+        for e in evs:
+            e.setdefault("url", "https://www.forexfactory.com/calendar")
+    return d
+
+
+def ff_events(which="thisweek"):
+    """Forex Factory weekly feed (the puller's source) as dashboard events in SGT; Holiday and 'All' rows dropped.
+
+    Cached 15 min and backs off 5 min on failure, since Forex Factory rate-limits. Feed times are GMT.
+    The nextweek feed 404s until Forex Factory publishes it, which gives [] rather than a fallback to another source.
+    """
+    hit = _ff_cache.get(which)
+    if hit and time.time() - hit[0] < 900:
+        return hit[1]
+    out = []
+    try:
+        req = urllib.request.Request(FF_URL % which, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            root = ET.fromstring(resp.read())
+        for ev in root.findall("event"):
+            g = lambda k: (ev.findtext(k) or "").strip()
+            impact, ccy = g("impact"), g("country")
+            if impact not in ("High", "Medium", "Low") or ccy not in TV_CCYS:
+                continue
+            when = dt.datetime.strptime("%s %s" % (g("date"), g("time")), "%m-%d-%Y %I:%M%p") + dt.timedelta(hours=8)
+            out.append({"date": when.strftime("%Y-%m-%d"), "time": when.strftime("%H:%M"), "impact": impact, "ccy": ccy,
+                        "event": g("title"), "forecast": g("forecast"), "previous": g("previous"), "actual": "",
+                        "url": g("url")})
+        out.sort(key=lambda e: (e["date"], e["time"], e["ccy"]))
+        _ff_cache[which] = (time.time(), out)
+    except Exception:
+        _ff_cache[which] = (time.time() - 600, hit[1] if hit else [])
         return hit[1] if hit else []
     return out
 

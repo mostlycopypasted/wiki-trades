@@ -10,3 +10,9 @@ __pycache__/
 
 # dashboard: statement-log snapshot (Performance tab)
 /dashboard/cache/
+
+# runtime state rewritten by scheduled runs
+/.fireflies_sync.json
+/scripts/daily_signal_seen.json
+/scripts/daily_signal_watches.json
+/scripts/h4_signal_watches.json
