@@ -22,9 +22,11 @@ import argparse
 import datetime
 import json
 import re
+import sys
 from pathlib import Path
 
-ALERT_RE = re.compile(r"(OptBull|LBull|SBull|OptBear|LBear|SBear)")
+# TAT v3 labels a confirmed Tflow pattern "Tflow LBull" etc.; keep the prefix.
+ALERT_RE = re.compile(r"((?:Tflow\s+)?(?:OptBull|LBull|SBull|OptBear|LBear|SBear))")
 
 
 def load_brief_json(path):
@@ -39,8 +41,11 @@ def load_brief_json(path):
 
 def get_bias(symbol_entry):
     for study in symbol_entry.get("indicators", {}).get("studies", []):
-        if study["name"].startswith("TATbyBinniOngv2"):
+        if study["name"].startswith("TATbyBinniOng"):  # v2 or v3
             values = study["values"]
+            if "Up Trend" not in values and "Down Trend" not in values:
+                print(f"⚠️ {study['name']} exposes no Up/Down Trend plot "
+                      f"(got {sorted(values)}); bias falls back to neutral", file=sys.stderr)
             up = float(values.get("Up Trend", 0) or 0)
             down = float(values.get("Down Trend", 0) or 0)
             if up == 1.0:

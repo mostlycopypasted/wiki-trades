@@ -75,6 +75,9 @@ METALS = {"XAUUSD", "XAGUSD"}
 SIGNAL_TIER = {"OptBull": 2, "OptBear": 2, "LBull": 1, "LBear": 1, "SBull": 0, "SBear": 0}
 BULL_SIGNALS = {"OptBull", "LBull", "SBull"}
 BEAR_SIGNALS = {"OptBear", "LBear", "SBear"}
+# TAT v3 also sends "Tflow <signal>" (trend-resumption pattern confirmed by that TAT
+# signal) a second or so after the plain signal on the same bar.
+TFLOW_PREFIX = "Tflow "
 
 # 4H bars are anchored at 17:00 SGT, so boundaries fall at 01/05/09/13/17/21 SGT.
 # The Telegram alert fires at the close of the bar, i.e. at the boundary itself.
@@ -152,7 +155,8 @@ def load_h4_alerts(target_date, symbol_filter=None, since=None):
         if symbol_filter and clean_symbol(symbol_filter) != clean_symbol(sym):
             continue
         signal = str(row.get("Signal Type", "")).strip()
-        if signal not in SIGNAL_TIER:
+        base_signal = signal.removeprefix(TFLOW_PREFIX).strip()
+        if base_signal not in SIGNAL_TIER:
             continue
         try:
             signal_price = float(row.get("Signal Price"))
@@ -162,12 +166,19 @@ def load_h4_alerts(target_date, symbol_filter=None, since=None):
             "symbol": sym,
             "clean": clean_symbol(sym),
             "name": row.get("Name", ""),
-            "direction": "Bullish" if signal in BULL_SIGNALS else "Bearish",
+            "direction": "Bullish" if base_signal in BULL_SIGNALS else "Bearish",
             "signal": signal,
+            "base_signal": base_signal,
+            "tflow": signal != base_signal,
             "signal_price": signal_price,
             "event": str(row.get("Event", "")).strip(),
             "alert_dt": dt,
         })
+    # A Tflow row and its plain twin are one signal: keep the Tflow one.
+    tflow_keys = {(a["clean"], a["base_signal"], a["alert_dt"].strftime("%Y-%m-%d %H:%M"))
+                  for a in out if a["tflow"]}
+    out = [a for a in out if a["tflow"] or
+           (a["clean"], a["base_signal"], a["alert_dt"].strftime("%Y-%m-%d %H:%M")) not in tflow_keys]
     out.sort(key=lambda a: a["alert_dt"], reverse=True)
     return out
 
@@ -383,7 +394,7 @@ def tat_bias(entry):
     h4-chart-scanner / daily-chart-scanner SKILL.md files say -1.0 and are wrong.
     """
     for study in (entry.get("indicators") or {}).get("studies", []) or []:
-        if str(study.get("name", "")).startswith("TATbyBinniOngv2"):
+        if str(study.get("name", "")).startswith("TATbyBinniOng"):  # v2 or v3
             values = study.get("values", {}) or {}
             up = float(values.get("Up Trend", 0) or 0)
             down = float(values.get("Down Trend", 0) or 0)
@@ -850,7 +861,7 @@ def score_tier1(alert, ctx):
     """0–10 quality score, applied only to signals that clear every hard gate."""
     rows = []
 
-    tier = SIGNAL_TIER.get(alert["signal"], 0)
+    tier = SIGNAL_TIER.get(alert["base_signal"], 0)
     rows.append(("Signal tier", tier, 2, f"`{alert['signal']}` — {alert['event']}"))
 
     # G6 already rejects counter-structure signals, so survivors are either

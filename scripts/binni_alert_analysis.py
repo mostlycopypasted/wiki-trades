@@ -47,6 +47,17 @@ def get_direction_from_signal(signal_type, details=""):
         return "Bearish"
     return "Neutral"
 
+def is_tflow(r):
+    return str(r.get('Signal Type') or r.get('Signal') or '').startswith('Tflow')
+
+def merge_tflow_pairs(records):
+    """TAT v3 sends a Tflow alert ("Tflow OptBull") about a second after the plain
+    signal ("OptBull") on the same bar. They are one signal: drop the plain twin."""
+    def key(r, sig):
+        return (normalize_symbol(r.get('Symbol') or ''), sig, get_record_date(r), str(r.get('Time') or '')[:-3])
+    tflow_keys = {key(r, str(r.get('Signal Type')).replace('Tflow', '', 1).strip()) for r in records if is_tflow(r)}
+    return [r for r in records if is_tflow(r) or key(r, str(r.get('Signal Type') or '').strip()) not in tflow_keys]
+
 def get_latest_full_date(records):
     if not records:
         return None
@@ -124,6 +135,7 @@ def analyze_alerts_binni_method(target_date=None, timeframe="H1", run_time=None,
     if not today_alerts:
         print(f"⚠️ No {tf} alerts found for date: {target_date}")
         return ""
+    today_alerts = merge_tflow_pairs(today_alerts)
 
     # Count overall session sentiment
     for a in today_alerts:
@@ -186,7 +198,17 @@ def analyze_alerts_binni_method(target_date=None, timeframe="H1", run_time=None,
         formatted_idx = [format_sym_dir(k, v) for k, v in indices_equity.items()]
         report.append(f"* **Indices & Equity Sector**: ({', '.join(formatted_idx)}) leans **{dominant_idx}** ({i_bullish} Bullish vs {i_bearish} Bearish out of {len(idx_dirs)} total). Track index breakout signals for equity momentum.\n")
     report.append(f"Today's **{tf}** session leans **{overall_sentiment}** overall ({bearish_count} Bearish vs {bullish_count} Bullish alerts out of {total_count} total), but the story changes depending on the asset cluster:\n")
-    
+
+    # Tflow (TAT v3 trend-resumption pattern); @Zone = the pullback ended in a W/M D-Zone
+    tflow_alerts = [a for a in today_alerts if is_tflow(a)]
+    if tflow_alerts:
+        items = []
+        for a in tflow_alerts:
+            sym = normalize_symbol(a.get('Symbol') or '')
+            zone = " @Zone" if "@Zone" in str(a.get('Event') or '') else ""
+            items.append(f"{format_sym_dir(sym, [a])} `{a.get('Signal Type')}`{zone} at {a.get('Time')}")
+        report.append(f"* **🌊 Tflow Trend-Resumption Signals**: {', '.join(items)}. The pullback inside the trend is done and TAT confirmed the resumption; `@Zone` ones ended at a higher-timeframe D-Zone, the stronger setup.\n")
+
     # Metals Narrative
     if metals:
         m_dirs = [a.get('Direction') for v in metals.values() for a in v]

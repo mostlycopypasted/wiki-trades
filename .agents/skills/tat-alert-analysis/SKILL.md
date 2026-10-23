@@ -95,6 +95,10 @@ When synthesizing the alert data, analyze according to Binni's core pillars:
 12. **Explicit Per-Instrument Direction Rule in Cluster Tables**:
     - In all TAT Alert Analysis reports and cluster summary tables, every instrument MUST explicitly specify its individual direction with visual indicators: `[[SYMBOL]] (🟢 Bull)` or `[[SYMBOL]] (🔴 Bear)`.
     - In cluster summary tables, group or tag pairs explicitly (e.g., `[[CADCHF]] (🟢 Bull), [[USDCAD]] (🟢 Bull), [[EURCAD]] (🔴 Bear), [[NZDCAD]] (🔴 Bear), [[GBPCAD]] (🔴 Bear)`) so the exact direction of every single pair is immediately unambiguous and obvious to evaluate at a glance.
+13. **Tflow Signals (TAT v3, added 2026-10-23)**:
+    - TAT v3 adds `Signal Type` values `Tflow OptBull/LBull/SBull` and `Tflow OptBear/LBear/SBear`. A Tflow is a **trend-resumption** pattern: a pullback inside a trend (bull points L → h → hL → Lh → LL, with LL above L) that a TAT signal then confirms. Event text: `Tflow Bullish Signal: D Level: …, LL: …`. When the pullback ended inside a Weekly/Monthly D-Zone, the text adds `@Zone (Support Zone xN (M,W), Zone High: …, Zone Low: …)`.
+    - The sheet logs each Tflow **with its plain twin** (`OptBull` one second earlier, same bar). Count the pair as **one** signal, the Tflow one; `binni_alert_analysis.py` and `validate_h4_signals.py` already merge them.
+    - Rank `Tflow … @Zone` above a plain signal of the same tier (Binni: a pullback ending at higher-timeframe support is "the stronger setup"), and call Tflow signals out by name in the narrative and in the New Alert screenshots list. See `wiki/concepts/tflow.md` and `wiki/concepts/d-zones.md`.
 
 ### 📋 Standard Cluster Summary Table Template:
 

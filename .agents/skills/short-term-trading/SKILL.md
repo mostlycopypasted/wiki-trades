@@ -44,7 +44,7 @@ High-profit short-term trading is achieved by **decoupling the stop-loss timefra
 
 ### **Step 3: H — Higher High / Lower Low (H1 Structure Shift)**
 1. **Structure Shift Confirmation**: Confirm price has broken previous trend momentum and created a Higher High (buys) or Lower Low (sells) on H1.
-2. **TAT Trend Status**: Verify `TATbyBinniOngv2` study state via TradingView MCP (`Up Trend = 1.0` for buys / `Down Trend = 1.0` for sells).
+2. **TAT Trend Status**: Verify the `TATbyBinniOng` study state (v3: `TATbyBinniOngv3|10S|Trend|NoTG|Zones`; v2 also accepted) via TradingView MCP (`Up Trend = 1.0` for buys / `Down Trend = 1.0` for sells).
 
 ### **Step 4: R — Retracement (M15 Execution)**
 1. **Strict Discipline Rule**: Never chase initial breakout candles; await retracement pullback into pre-calculated 1H/M15 TAT support/resistance cluster.
