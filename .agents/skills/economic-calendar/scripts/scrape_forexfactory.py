@@ -11,6 +11,8 @@ the XML feed. Page times are already SGT because the browser runs in Asia/Singap
 
     python3 scripts/scrape_forexfactory.py            # this, next and last week
     python3 scripts/scrape_forexfactory.py this       # one week only
+    python3 scripts/scrape_forexfactory.py due        # every-minute tick: scrape only if a release is 1+ min old
+                                                      # with a blank Actual (up to 5 tries per event)
 """
 import datetime as dt
 import json
@@ -121,9 +123,67 @@ def quit_if_idle():
         print("quit_if_idle skipped:", e, file=sys.stderr)
 
 
+SGT = dt.timezone(dt.timedelta(hours=8))
+STATE = OUT.with_name("ff_actual_state.json")   # {event id: {"n": attempts, "last": epoch}}
+FIRST_DELAY = 60       # first look this long after the scheduled release
+RETRY_GAP = 55         # then roughly every minute...
+MAX_TRIES = 5          # ...up to this many looks per event
+
+
+def due_events():
+    """Events released at least a minute ago whose Actual is still blank and that have tries left.
+
+    Only High/Medium events with a forecast or previous figure are watched: speeches and the like never get
+    an Actual, so they would burn all their tries for nothing.
+    """
+    try:
+        weeks = json.loads(OUT.read_text(encoding="utf-8")).get("weeks", {})
+    except (OSError, ValueError):
+        weeks = {}
+    try:
+        state = json.loads(STATE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        state = {}
+    now = dt.datetime.now(SGT)
+    due, seen = [], set()
+    for evs in weeks.values():
+        for e in evs:
+            if e["id"] in seen or e["actual"] or e["impact"] not in ("High", "Medium") or not (e["forecast"] or e["previous"]):
+                continue
+            seen.add(e["id"])
+            when = dt.datetime.fromisoformat("%sT%s:00+08:00" % (e["date"], e["time"]))
+            late = (now - when).total_seconds()
+            s = state.get(e["id"], {"n": 0, "last": 0})
+            if late >= FIRST_DELAY and s["n"] < MAX_TRIES and now.timestamp() - s["last"] >= RETRY_GAP:
+                due.append(e["id"])
+    return due, state
+
+
+def run_due():
+    """Scheduled every minute: do nothing (no browser) unless an event's look-up is due, then scrape this week."""
+    due, state = due_events()
+    if not due:
+        return
+    now = dt.datetime.now().timestamp()
+    for i in due:
+        s = state.setdefault(i, {"n": 0, "last": 0})
+        s["n"] += 1
+        s["last"] = now
+    # keep a week of history so a finished event is not retried if its row reappears
+    state = {k: v for k, v in state.items() if now - v["last"] < 7 * 86400}
+    STATE.write_text(json.dumps(state), encoding="utf-8")
+    print("looking up Actuals for %d event(s): %s" % (len(due), ", ".join(due)))
+    scrape_and_write(["this"])
+
+
 def main():
-    weeks = [w for w in sys.argv[1:] if w in WEEKS] or WEEKS
-    today = dt.datetime.now(dt.timezone(dt.timedelta(hours=8))).date()
+    if sys.argv[1:2] == ["due"]:
+        return run_due()
+    scrape_and_write([w for w in sys.argv[1:] if w in WEEKS] or WEEKS)
+
+
+def scrape_and_write(weeks):
+    today = dt.datetime.now(SGT).date()
     try:
         raw = scrape(weeks)
     finally:
