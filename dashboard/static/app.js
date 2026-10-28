@@ -76,10 +76,12 @@ function toast(msg) {
 
 // ============================================================ data
 const cache = {};
+const cacheT = {};              // when each path was fetched; entries older than API_TTL are refetched
+const API_TTL = 45000;
 async function api(path, { fresh = false } = {}) {
-  if (!fresh && cache[path]) return cache[path];
+  if (!fresh && cache[path] && !(cacheT[path] && Date.now() - cacheT[path] > API_TTL)) return cache[path];
   const p = fetch(path).then(r => r.ok ? r.json() : null).catch(() => null);
-  cache[path] = p;
+  cache[path] = p; cacheT[path] = Date.now();
   const v = await p;
   if (v === null) delete cache[path];
   return v;
@@ -831,7 +833,7 @@ async function viewBrief(root) {
   const idx = dates.indexOf(f.date);
   const setDate = d => { f.date = d; saveFilters(); render(); };
   root.replaceChildren(
-    h('div', { class: 'view-head' }, h('h1', null, 'Daily Brief'), h('span', { class: 'sub' }, b ? b.title.replace(/^📅\s*/, '') : '')),
+    h('div', { class: 'view-head' }, h('h1', null, 'The Brief'), h('span', { class: 'sub' }, b ? b.title.replace(/^📅\s*/, '') : '')),
     h('div', { class: 'filters' },
       h('div', { class: 'datebar' },
         h('button', { class: 'iconbtn', disabled: idx >= dates.length - 1 ? true : null, onclick: () => setDate(dates[idx + 1]) }, '‹'),
@@ -919,6 +921,32 @@ async function viewMyWatchlist(root) {
     list.length ? h('div', { class: 'wgrid' }, list.map(sym => { const e = shots[sym]; return h('div', { class: 'wcard' },
       e && e.img ? h('img', { src: '/images/' + e.img, loading: 'lazy', alt: `${sym} 4H chart`, dataset: { full: '/images/' + e.img, cap: `${sym} · 4H · ${g.date}` } }) : h('div', { class: 'empty' }, 'Chart appears after the next 4H sweep'),
       h('div', { class: 'wb' }, symChip(sym), h('button', { class: 'iconbtn', style: { marginLeft: 'auto' }, title: `Remove ${sym} from watchlist`, onclick: () => rm(sym) }, '✕'))); })) : empty('Nothing matches')));
+}
+
+// ============================================================ views: PORTFOLIO
+async function viewPortfolio(root) {
+  const f = F('portfolio', { date: '' });
+  const p = await api('/api/portfolio' + (f.date ? '?date=' + f.date : ''), { fresh: true });
+  const snap = p && p.snapshot;
+  const dates = (p && p.dates) || [];
+  root.replaceChildren(h('div', { class: 'view-head' }, h('h1', null, 'Portfolio'),
+    h('span', { class: 'sub' }, snap ? `Daily chart snapshot · ${snap.date} · ${snap.time} SGT run` : 'Daily chart snapshot runs Mon–Fri 19:15 SGT'),
+    dates.length ? h('span', { style: { marginLeft: 'auto' } }, h('select', { 'aria-label': 'Snapshot date', onchange: e => { f.date = e.target.value; saveFilters(); render(); } },
+      dates.map((d, i) => h('option', { value: i ? d : '', selected: (f.date || dates[0]) === d ? true : null }, d)))) : null));
+  const hold = (p && p.holdings) || [];
+  if (!hold.length) { root.appendChild(empty('No holdings — add them to ~/tradingview-mcp/portfolio.json.')); return; }
+  const q = S.q;
+  const list = hold.filter(x => matches(q, x.sym) || matches(q, x.name || ''));
+  const fmt = (v, d) => Number(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+  root.appendChild(card('Holdings', `${list.length} of ${hold.length}${p.source ? ' · ' + p.source : ''}`, h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' },
+    h('thead', null, h('tr', null, ['Symbol', 'Name', 'Ccy', 'Shares', 'Avg cost', 'Cost basis'].map(c => h('th', null, c)))),
+    h('tbody', null, list.map(x => h('tr', null, h('td', null, symChip(x.sym)), h('td', null, x.name || ''), h('td', null, x.ccy || ''),
+      h('td', { class: 'num' }, fmt(x.shares, 0)), h('td', { class: 'num' }, fmt(x.cost, 3)), h('td', { class: 'num' }, fmt(x.shares * x.cost, 2)))))))));
+  const shots = Object.fromEntries(((snap && snap.entries) || []).map(e => [e.sym, e]));
+  root.appendChild(h('div', { class: 'mt' }, card('Daily charts', snap ? `${Object.keys(shots).length} of ${hold.length} captured` : 'no snapshot yet',
+    list.length ? h('div', { class: 'wgrid' }, list.map(x => { const e = shots[x.sym]; return h('div', { class: 'wcard' },
+      e ? h('img', { src: '/images/' + e.img, loading: 'lazy', alt: `${x.sym} daily chart`, dataset: { full: '/images/' + e.img, cap: `${x.sym} · Daily · ${snap.date}` } }) : h('div', { class: 'empty' }, 'Chart appears after the next daily snapshot'),
+      h('div', { class: 'wb' }, symChip(x.sym), h('span', { class: 'muted small', style: { marginLeft: 'auto' } }, x.name || ''))); })) : empty('Nothing matches'))));
 }
 
 // ============================================================ instrument drawer
@@ -1424,7 +1452,7 @@ async function viewPerformance(root) {
 }
 
 // ============================================================ routing & rendering
-const VIEWS = { desk: viewDesk, signals: viewSignals, analysis: viewAnalysis, calendar: viewCalendar, ahh: viewAhh, brief: viewBrief, 'my-watchlist': viewMyWatchlist, journal: viewJournal, performance: viewPerformance };
+const VIEWS = { desk: viewDesk, signals: viewSignals, analysis: viewAnalysis, calendar: viewCalendar, ahh: viewAhh, brief: viewBrief, 'my-watchlist': viewMyWatchlist, journal: viewJournal, performance: viewPerformance, portfolio: viewPortfolio };
 let renderSeq = 0;
 async function render() {
   const seq = ++renderSeq, view = S.view, root = $('#view-' + view);
@@ -1540,6 +1568,7 @@ const COMMANDS = {
   calendar: 'calendar', cal: 'calendar', econ: 'calendar', news: 'desk', ahh: 'ahh', sessions: 'ahh', ideas: 'ahh',
   brief: 'brief', daily: 'brief', watchlist: 'my-watchlist', wl: 'my-watchlist', journal: 'journal', jnl: 'journal',
   performance: 'performance', perf: 'performance', pnl: 'performance',
+  portfolio: 'portfolio', port: 'portfolio', pf: 'portfolio',
 };
 
 // ============================================================ boot
@@ -1562,8 +1591,8 @@ function wire() {
     if (e.key === '/' && !['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) { e.preventDefault(); $('#q').focus(); $('#q').select(); }
     if (e.key === 'Escape' && document.activeElement !== $('#q')) closeOverlays();
     if (e.key === '[' && !['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) $('#sideToggle').click();
-    if (/^[1-9]$/.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey && !['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
-      const a = document.querySelectorAll('#nav a')[+e.key - 1]; if (a) go(a.dataset.view);
+    if (/^[0-9]$/.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey && !['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+      const a = document.querySelectorAll('#nav a')[(+e.key + 9) % 10]; if (a) go(a.dataset.view);
     }
   });
   document.addEventListener('click', e => {
@@ -1678,6 +1707,21 @@ function fillSymbols() {
   if (['desk', 'signals'].includes(S.view)) render();
   setInterval(pollNews, NEWS_POLL_MS);
   document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - newsPolledAt > NEWS_POLL_MS) pollNews(); });
+  // keep whatever view is open fresh: re-render every minute and when the tab becomes visible again,
+  // unless the user is mid-edit (overlay open or a field focused). api() refetches anything older than API_TTL.
+  let lastRender = Date.now();
+  const autoRefresh = async (minAge) => {
+    if (document.hidden || Date.now() - lastRender < minAge) return;
+    const busy = ['drawer', 'modal', 'lightbox'].some(id => { const el = $('#' + id); return el && el.classList.contains('show'); })
+      || /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName) && document.activeElement.id !== 'q';
+    if (busy) return;
+    lastRender = Date.now();
+    S.meta = (await api('/api/meta')) || S.meta;
+    render();
+  };
+  setInterval(() => autoRefresh(55000), 60000);
+  document.addEventListener('visibilitychange', () => autoRefresh(30000));
+  window.addEventListener('focus', () => autoRefresh(30000));
   let lastFetch = S.sig && S.sig.status && S.sig.status.fetchedAt;
   setInterval(async () => {
     await loadSignals();

@@ -176,6 +176,7 @@ ROUTES = {
     "/api/news": lambda q: NEWS.news(refresh=q.get("refresh") == "1"),
     "/api/my-watchlist": lambda q: W.my_watchlist_gallery(),
     "/api/my-watchlist/config": lambda q: {"symbols": W.my_watchlist_symbols()},
+    "/api/portfolio": lambda q: W.portfolio(q.get("date")),
     "/api/performance": lambda q: ST.performance(account=q.get("account", "all"), since=q.get("since"),
                                                  refresh=q.get("refresh") == "1"),
 }

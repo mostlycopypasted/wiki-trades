@@ -596,6 +596,34 @@ def my_watchlist_edit(action, sym, prefix=""):
     return True, "%s %s" % (sym, "added" if action == "add" else "removed")
 
 
+PORTFOLIO_JSON = Path.home() / "tradingview-mcp" / "portfolio.json"   # holdings + the daily sweep's symbol list
+PORTFOLIO_DIR = WIKI / "reports" / "portfolio"                      # scripts/portfolio_snapshot.py, one file per day
+
+
+def portfolio(date=None):
+    """Holdings from portfolio.json plus the last run of one day's Daily chart snapshot (newest day by default)."""
+    try:
+        cfg = json.loads(PORTFOLIO_JSON.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        cfg = {}
+    files = sorted(PORTFOLIO_DIR.glob("[0-9][0-9][0-9][0-9][0-9][0-9]-portfolio.md"), reverse=True)
+    dates = ["20%s-%s-%s" % (p.name[:2], p.name[2:4], p.name[4:6]) for p in files]
+    snap = None
+    for path, d in zip(files, dates):
+        if date and d != date:
+            continue
+        md = read(path)
+        marks = list(re.finditer(r"^## 🕒 \[(\d{1,2}:\d{2}) SGT\].*$", md, re.M))
+        if not marks:
+            continue
+        last = marks[-1]
+        entries = [{"sym": m.group(1).upper(), "img": os.path.basename(m.group(2))}
+                   for m in re.finditer(r"!\[(\w+)[^\]]*\]\(([^)]+)\)", md[last.end():])]
+        snap = {"date": d, "time": last.group(1), "path": str(path.relative_to(WIKI)), "entries": entries}
+        break
+    return {"holdings": cfg.get("holdings", []), "source": cfg.get("source"), "dates": dates, "snapshot": snap}
+
+
 def my_watchlist_gallery():
     """Newest My-Watchlist 4H sweep: the dedicated my_watchlist/ files, or a TAT report section, whichever is later."""
     tat = _tat_watchlist_gallery()
@@ -875,7 +903,7 @@ def tv_events(start, end):
 
 
 FF_CACHE = ROOT / "dashboard" / "cache" / "ff_calendar.json"
-FF_SCRAPE_MAX_AGE = 12 * 3600   # a scrape older than this is ignored (the scheduled job has stopped working)
+FF_SCRAPE_MAX_AGE = 30 * 3600   # a scrape older than this is ignored (the daily 05:25 job has stopped working)
 FF_URL = "https://nfs.faireconomy.media/ff_calendar_%s.xml"
 _ff_cache = {}
 
