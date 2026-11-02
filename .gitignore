@@ -16,3 +16,7 @@ __pycache__/
 /scripts/daily_signal_seen.json
 /scripts/daily_signal_watches.json
 /scripts/h4_signal_watches.json
+
+# Signal Judge (Phase 1 case store): local run files and per-machine writer config
+scripts/signal_judge_runs/
+scripts/signal_judge_config.json
