@@ -11,9 +11,10 @@ This module imports the Daily script's scoring, labels and chart code unchanged.
 
 Unlike the Daily brief (one file per day), a 4H structure can change several times
 a day, so every scan is its own snapshot: ~/tradingview-mcp/4H_brief/YYYY-MM-DD_HHMM.json.
-Run it just after a 4H bar closes (forex 4H bars close 01:00/05:00/09:00/13:00/17:00/
-21:00 SGT) so the ZigZag labels are read off a completed bar, not a forming one — the
-09:01/13:01/17:01/21:01 SGT TAT review slots line up with that.
+Run it just after a 4H bar closes (forex 4H bars close 02/06/10/14/18/22 SGT in US
+standard time, 01/05/09/13/17/21 SGT in US daylight saving) so the ZigZag labels are
+read off a completed bar, not a forming one — the TAT review slots (07:01/10:01/14:01/
+18:01/22:01 SGT, one hour earlier in daylight saving) line up with that.
 
 Usage:
     python3 scripts/tat_currency_strength_4h.py --scan     # live tv scan, then report

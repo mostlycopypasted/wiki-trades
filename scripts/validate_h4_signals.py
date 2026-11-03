@@ -46,7 +46,7 @@ from scripts.fetch_google_sheet import fetch_sheet_records
 from scripts.scan_drhr_setups import format_price_precision
 from scripts.scan_fake_breakout_setups import (
     SGT,
-    ANCHOR_4H,
+    bar4h_start,
     yahoo_ticker,
     fetch_1h_bars,
     aggregate_4h_bars,
@@ -79,8 +79,9 @@ BEAR_SIGNALS = {"OptBear", "LBear", "SBear"}
 # signal) a second or so after the plain signal on the same bar.
 TFLOW_PREFIX = "Tflow "
 
-# 4H bars are anchored at 17:00 SGT, so boundaries fall at 01/05/09/13/17/21 SGT.
-# The Telegram alert fires at the close of the bar, i.e. at the boundary itself.
+# 4H bars follow the New York forex day (bar4h_start): boundaries fall at
+# 02/06/10/14/18/22 SGT in US standard time, 01/05/09/13/17/21 SGT in US daylight
+# saving. The Telegram alert fires at the close of the bar, i.e. at the boundary itself.
 BAR_SECONDS = 4 * 3600
 
 # G2 thresholds — the "convincing close" filter the TAT indicator itself omits
@@ -186,11 +187,10 @@ def load_h4_alerts(target_date, symbol_filter=None, since=None):
 def signal_bar_window(alert_dt):
     """The 4H bar whose CLOSE produced this alert: [start, close).
 
-    Alerts land a few seconds past the boundary (e.g. 5:01:00 for the 01:00-05:00
-    bar), so snap back to the bar that had just closed.
+    Alerts land a few seconds past the boundary (e.g. 06:01:00 for the 02:00-06:00
+    bar in US standard time), so snap back to the bar that had just closed.
     """
-    offset = int((alert_dt - ANCHOR_4H).total_seconds() // BAR_SECONDS)
-    boundary = ANCHOR_4H + datetime.timedelta(seconds=offset * BAR_SECONDS)
+    boundary = bar4h_start(alert_dt)
     # `boundary` is the start of the bar the alert timestamp falls INSIDE; the bar
     # that actually closed is the one before it.
     return boundary - datetime.timedelta(seconds=BAR_SECONDS), boundary

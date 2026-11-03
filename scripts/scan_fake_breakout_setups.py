@@ -43,7 +43,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from scripts.scan_drhr_setups import format_price_precision
 
 SGT = datetime.timezone(datetime.timedelta(hours=8))
-ANCHOR_4H = datetime.datetime(2000, 1, 1, 17, 0, tzinfo=SGT)
+_NY = ZoneInfo("America/New_York")
+
+
+def bar4h_start(dt):
+    """Start (in SGT) of the 4H bar containing aware datetime `dt`.
+
+    The forex day rolls over at 17:00 New York, and TradingView's 4H bars start at
+    17/21/01/05/09/13 New York time. In SGT that is 02/06/10/14/18/22 during US
+    standard time and 01/05/09/13/17/21 during US daylight saving, so the grid is
+    computed in New York time rather than from a fixed SGT anchor.
+    """
+    ny = dt.astimezone(_NY)
+    start = ny.replace(minute=0, second=0, microsecond=0) - datetime.timedelta(hours=(ny.hour - 1) % 4)
+    return start.astimezone(SGT)
 
 CRYPTO_BASES = {"BTC", "ETH", "SOL", "NEAR"}
 STOCK_TICKERS = {"TSLA", "NVDA", "MSFT", "META", "AAPL", "AMZN", "GOOGL", "CLSK", "MSTR", "RIOT", "IBIT"}
@@ -143,11 +156,11 @@ def fetch_1h_bars(symbol, range_param="30d"):
 
 
 def aggregate_4h_bars(hourly_bars):
-    """Bin closed 1H bars into 4H candles anchored at 17:00 SGT (matches TradingView's 4H boundary)."""
+    """Bin closed 1H bars into 4H candles on TradingView's New-York-anchored 4H grid
+    (see bar4h_start)."""
     bins = {}
     for b in hourly_bars:
-        bin_id = int((b['dt'] - ANCHOR_4H).total_seconds() // (4 * 3600))
-        bins.setdefault(bin_id, []).append(b)
+        bins.setdefault(bar4h_start(b['dt']), []).append(b)
 
     bars = []
     for bin_id in sorted(bins.keys()):
