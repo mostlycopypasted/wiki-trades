@@ -114,6 +114,22 @@ def extract_report_summary(fpath: Path, r_type: str) -> tuple[str, str]:
         scan_info = m.group(1).strip() if m else "Sector alert scan"
         summary = f"{time_label} • {scan_info}" if time_label else scan_info
 
+    elif r_type == "signal_judge":
+        runs = re.findall(r"^## 🕒 Signal Judge Run — \[(\d\d:\d\d) SGT\]", txt, re.MULTILINE)
+        tot = {"judged": 0, "take": 0, "wait": 0, "skip": 0, "no ruling": 0}
+        for line in re.findall(r"Run summary: ([^\n]+)", clean_txt):
+            m = re.search(r"(\d+) judged", line)
+            tot["judged"] += int(m.group(1)) if m else 0
+            for k in ("take", "wait", "skip", "no ruling"):
+                m = re.search(rf"\b{k} (\d+)", line)
+                tot[k] += int(m.group(1)) if m else 0
+        summary = (f"{tot['judged']} judged · take {tot['take']} · wait {tot['wait']} · skip {tot['skip']} · "
+                   f"no ruling {tot['no ruling']}")
+        if runs:
+            t_lbl = f"{runs[0]} SGT initial, latest {runs[-1]} SGT" if len(runs) > 1 else f"{runs[0]} SGT"
+            return t_lbl, summary
+        return "", summary
+
     return time_label, summary
 
 
@@ -184,6 +200,17 @@ def scan_reports_for_date(d_str: str) -> list[dict]:
             "category": "Equity News Scan",
             "title": f"Equity News Scan ({t_str})" if t_str else "Equity News Scan",
             "rel_path": str(eq_path.relative_to(WIKI_ROOT / "wiki")),
+            "summary": summary
+        })
+
+    # 7. Signal Judge (live judge verdicts on fresh 1H/4H TAT signals)
+    sj_path = REPORTS_DIR / "tat_analysis" / "signal_judge" / f"{d_str}-signal-judge.md"
+    if sj_path.exists():
+        t_str, summary = extract_report_summary(sj_path, "signal_judge")
+        found.append({
+            "category": "Signal Judge",
+            "title": f"Signal Judge ({t_str})" if t_str else "Signal Judge",
+            "rel_path": str(sj_path.relative_to(WIKI_ROOT / "wiki")),
             "summary": summary
         })
 

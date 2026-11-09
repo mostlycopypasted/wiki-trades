@@ -385,6 +385,8 @@ No schedule, no TradingView, no Orca change. Everything runs by hand or inside a
 
 Phase 2 (the live judge), with the open points already found in the parent design's round 5: Daily resolution reported as `1D`; `setTimeframe` retry; short session-end bar matching; detecting the 17:00–18:00 NY break; basis from the same closed bar (Yahoo futures lag ~10 min); judging inline in the Orca session instead of via a background subagent; retry entries re-reading their sheet row; start in its own process group and stop quitting TradingView when the lock is gone; delayed-alert keys; the Mac mini's interpreter. Also the stale wording in `trading-transcript-ingest`, and a historical economic-calendar source for `news_pending`.
 
+Phase 2 is built (2026-11-03): see `docs/design/signal-judge.md` rev 11. It adds the oil class (`USOUSD`), the shared `nominal_close` / `load_judged_alerts` loader and a per-tab Tflow-skipped flag to `signal_cases.py`.
+
 ## Revision 3 — binding clarifications
 
 From the round-2 critic (C1–C11) and readiness (Q1–Q7):

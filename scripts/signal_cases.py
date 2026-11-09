@@ -44,6 +44,7 @@ sys.path.insert(0, str(ROOT))
 from scripts.validate_h4_signals import (  # noqa: E402
     FX_CCY, SIGNAL_TIER, TFLOW_PREFIX, cross_pair_consistency, is_in_scope,
 )
+from scripts.scan_fake_breakout_setups import bar4h_start  # noqa: E402
 
 SGT = dt.timezone(dt.timedelta(hours=8))
 NY = ZoneInfo("America/New_York")
@@ -86,9 +87,11 @@ OVERRIDES = {"NDX": "NDQ100", "NAS100": "NDQ100", "US100": "NDQ100", "NASDAQ": "
              "RUSSELL": "US2000", "RUT": "US2000", "DXY": "USDX", "USDX": "USDX", "DXYUSD": "USDX",
              "NKY": "JPN225", "NI225": "JPN225", "NQ1!": "NDQ100", "NQ100": "NDQ100", "SPXUSD": "SPX500",
              "FCHI": "FRA40", "HSIINDEX": "HSI", "HKSE": "HSI", "TESLA": "TSLA", "HGUSD": "XCUUSD",
-             "COPPER": "XCUUSD", "BITCOIN": "BTCUSD"}
+             "COPPER": "XCUUSD", "BITCOIN": "BTCUSD", "USOIL": "USOUSD", "WTI": "USOUSD", "CRUDE": "USOUSD",
+             "CL1!": "USOUSD"}
 
 METALS = {"XAUUSD", "XAGUSD"}
+OIL = {"USOUSD"}
 INDICES = {"NDQ100", "SPX500", "US30", "US2000", "JPN225"}
 UNTRACKED = {"GER40", "HK50", "UK100", "FRA40", "CN50", "USDX", "XAUJPY", "XAUAUD", "XAUGBP"}
 UNTRACKED_KIND = {"XAUJPY": "metal", "XAUAUD": "metal", "XAUGBP": "metal"}  # the rest are indices
@@ -97,8 +100,20 @@ INDEX_CCY = {"NDQ100": ["USD"], "SPX500": ["USD"], "US30": ["USD"], "US2000": ["
              "JPN225": ["JPY"], "GER40": ["EUR"], "FRA40": ["EUR"], "UK100": ["GBP"], "HK50": ["HKD"],
              "CN50": ["CNY"]}
 
-YAHOO = {"XAUUSD": "GC=F", "XAGUSD": "SI=F", "NDQ100": "NQ=F", "SPX500": "ES=F", "US30": "YM=F",
+YAHOO = {"XAUUSD": "GC=F", "XAGUSD": "SI=F", "USOUSD": "CL=F", "NDQ100": "NQ=F", "SPX500": "ES=F", "US30": "YM=F",
          "US2000": "RTY=F", "JPN225": "NIY=F"}
+# FX pairs Yahoo serves no 1H series for (judged, outcome UNTRACKED). Filled by the Phase 2
+# dry-run check (docs/design/signal-judge.md, Revision 11 item 14).
+UNTRACKED_FX = set()
+
+# 1H bar grid: minutes past the hour at which a symbol's Eightcap 1H bars start/close
+# (measured on TradingView OHLCV 2026-11-03). Everything else is on the hour.
+GRID_OFFSET_MIN = {"XAUUSD": 1, "XAGUSD": 1, "XAUJPY": 1, "XAUAUD": 1, "XAUGBP": 1, "GER40": 15, "HK50": 15}
+
+# Phase 2 judged (class, timeframe) pairs: forex on the 4H, everything else on the 1H.
+JUDGED_TF = {"fx": "4H", "metal": "1H", "oil": "1H", "index": "1H", "untracked": "1H"}
+CLASSES = ("fx", "metal", "oil", "index", "untracked")
+
 CRYPTO_BASES = {"BTC", "ETH", "SOL", "NEAR", "XRP", "ADA", "DOGE", "BNB", "LTC", "AVAX", "DOT", "LINK"}
 
 
@@ -122,6 +137,8 @@ def instrument_class(sym):
         return "metal"
     if sym in INDICES:
         return "index"
+    if sym in OIL:
+        return "oil"
     if sym in UNTRACKED:
         return "untracked"
     if is_fx(sym):
@@ -142,7 +159,7 @@ def instrument_currencies(sym):
     sym = canon_instrument(sym)
     if is_fx(sym):
         return [sym[:3], sym[3:]]
-    if sym in METALS:
+    if sym in METALS or sym in OIL:
         return ["USD"]
     if sym in UNTRACKED_KIND:
         return ["USD", sym[3:]]
@@ -462,6 +479,8 @@ def validate_case(c, note_norm, opps):
     cls = instrument_class(inst)
     if cls != "out":
         want = class_kind(inst)
+        if want == "oil":
+            want = "commodity"  # the case vocabulary calls oil "commodity"
         if c["asset_class"] != want:
             return f"asset_class {c['asset_class']} but {inst} is {want}"
     on = c["opportunity_no"]
@@ -812,40 +831,170 @@ def parse_alert_time(row):
     return None
 
 
+def nominal_close(sym, tab, at):
+    """The latest bar-grid close at or before at + 120 s (alerts land a few seconds after the
+    close; a late alert snaps to the close that had just passed). 1H: the hour grid shifted by
+    GRID_OFFSET_MIN; FX 4H: the New-York-anchored grid (bar4h_start). Non-FX 4H rows (never
+    judged; only Phase 1's replay sees them) use the 1H rule, an approximation."""
+    t = at + dt.timedelta(seconds=120)
+    sym = canon_instrument(sym)
+    if tab == "4H" and is_fx(sym):
+        return bar4h_start(t)
+    off = dt.timedelta(minutes=GRID_OFFSET_MIN.get(sym, 0))
+    return (t - off).replace(minute=0, second=0, microsecond=0) + off
+
+
+def _closures_before(t):
+    """Weekend closures (Fri 17:00 -> Sun 17:00 New York) that start before t, newest first, as SGT."""
+    ny = t.astimezone(NY)
+    fri = (ny - dt.timedelta(days=(ny.weekday() - 4) % 7)).replace(hour=17, minute=0, second=0, microsecond=0)
+    if fri > ny:
+        fri -= dt.timedelta(days=7)
+    for k in range(60):
+        f = fri - dt.timedelta(days=7 * k)
+        yield f.astimezone(SGT), (f + dt.timedelta(days=2)).astimezone(SGT)
+
+
+def market_hours_between(a, b):
+    """Calendar hours from a to b minus the overlap with each weekend closure."""
+    if b <= a:
+        return 0.0
+    total = (b - a).total_seconds()
+    for c0, c1 in _closures_before(b):
+        if c1 <= a:
+            break
+        lo, hi = max(a, c0), min(b, c1)
+        if hi > lo:
+            total -= (hi - lo).total_seconds()
+    return total / 3600.0
+
+
+def market_cutoff(run_dt, hours):
+    """The instant `hours` market hours before run_dt, walking back over weekend closures."""
+    left = dt.timedelta(hours=hours)
+    t = run_dt
+    for c0, c1 in _closures_before(run_dt):
+        if t > c1:
+            span = t - c1
+            if span >= left:
+                return t - left
+            left -= span
+        t = min(t, c0)
+    return t - left
+
+
+def _row_price(row):
+    try:
+        v = str(row.get("Signal Price", "")).replace(",", "").strip()
+        return float(v) if v else None
+    except ValueError:
+        return None
+
+
+def _parse_row(tab, row):
+    """-> (sym, tab, direction long|short, signal, base, at, row) or None (skipped) or False (ignored)."""
+    at = parse_alert_time(row)
+    sig = str(row.get("Signal Type", "")).strip()
+    direc = str(row.get("Direction", "")).strip()
+    if at is None or not sig or direc not in ("Bullish", "Bearish"):
+        return None
+    base = sig[len(TFLOW_PREFIX):] if sig.startswith(TFLOW_PREFIX) else sig
+    if base not in SIGNAL_TIER:
+        return False
+    sym = canon_instrument(row.get("Symbol", ""))
+    return sym, tab, ("long" if direc == "Bullish" else "short"), sig, base, at, row
+
+
+def _build_alerts(parsed):
+    """Group parsed rows by (symbol, tab, direction, nominal close); rows more than 10 min after
+    the group's earliest row form one '#d' group of their own."""
+    groups = {}
+    for p in parsed:
+        sym, tab, d, sig, base, at, row = p
+        nc = nominal_close(sym, tab, at)
+        groups.setdefault((sym, tab, d, nc), []).append(p)
+    out = []
+    for (sym, tab, d, nc), rows in groups.items():
+        rows.sort(key=lambda r: r[5])
+        t0 = rows[0][5]
+        main = [r for r in rows if (r[5] - t0).total_seconds() <= 600]
+        late = [r for r in rows if (r[5] - t0).total_seconds() > 600]
+        key = f"{sym}|{tab}|{'Bull' if d == 'long' else 'Bear'}|{nc.isoformat()}"
+        for part, k in ((main, key), (late, key + "#d")):
+            if not part:
+                continue
+            tfl = [r for r in part if r[3].startswith(TFLOW_PREFIX)]
+            chosen = tfl[0] if tfl else max(part, key=lambda r: SIGNAL_TIER[r[4]])
+            plain = [r for r in part if r[3] == chosen[4]]
+            if plain:
+                price, kind = _row_price(plain[0][6]), "level"
+            else:
+                price, kind = _row_price(chosen[6]), ("tflow" if tfl else "level")
+            out.append({
+                "key": k, "prepass_key": k, "parent_key": key if k != key else None, "delayed": k != key,
+                "symbol": sym, "tv_symbol": str(chosen[6].get("Symbol", "")), "class": instrument_class(sym),
+                "tf": tab, "direction": d, "direction_tv": "Bullish" if d == "long" else "Bearish",
+                "signal": chosen[3], "base_signal": chosen[4],
+                "also_fired": sorted({r[3] for r in part} - {chosen[3]}),
+                "event": str(chosen[6].get("Event", "")),
+                "tflow": parse_tflow_event(chosen[6].get("Event")) if tfl else None,
+                "nominal_close": nc, "alert_time": part[0][5], "alert_dt": chosen[5],
+                "signal_price": price, "signal_price_kind": kind,
+                "row_times": [[str(r[6].get("Date", "")).strip(), str(r[6].get("Time", "")).strip(),
+                               str(r[6].get("Symbol", "")).strip()] for r in part]})
+    out.sort(key=lambda a: (a["nominal_close"], a["key"]))
+    return out
+
+
 def load_alerts(rows_by_tab, since):
-    groups, skipped = {}, 0
+    """Phase 1 loader (coverage replay): every in-class alert with nominal close >= since."""
+    parsed, skipped = [], 0
     for tab, rows in rows_by_tab.items():
         for row in rows or []:
-            at = parse_alert_time(row)
-            sig = str(row.get("Signal Type", "")).strip()
-            direc = str(row.get("Direction", "")).strip()
-            if at is None or not sig or direc not in ("Bullish", "Bearish"):
+            p = _parse_row(tab, row)
+            if p is None:
                 skipped += 1
                 continue
-            base = sig[len(TFLOW_PREFIX):] if sig.startswith(TFLOW_PREFIX) else sig
-            if base not in SIGNAL_TIER:
+            if p is False or instrument_class(p[0]) == "out":
                 continue
-            sym = canon_instrument(row.get("Symbol", ""))
-            if instrument_class(sym) == "out":
+            if nominal_close(p[0], tab, p[5]) < since:
                 continue
-            nc = at.replace(minute=0, second=0, microsecond=0)
-            if nc < since:
+            parsed.append(p)
+    return _build_alerts(parsed), skipped
+
+
+def is_judged_pair(sym, tab):
+    return JUDGED_TF.get(instrument_class(sym)) == tab
+
+
+def load_judged_alerts(rows_by_tab, cutoff, context_since):
+    """Phase 2 loader. alerts = judged (class, TF) pairs with nominal close >= cutoff;
+    context = every in-scope-class alert on either tab with nominal close >= context_since."""
+    counts = {"rows_in_window": 0, "out_of_scope": 0, "out_of_tf": 0}
+    judged, ctx, skipped = [], [], 0
+    for tab, rows in rows_by_tab.items():
+        for row in rows or []:
+            p = _parse_row(tab, row)
+            if p is None:
+                skipped += 1
                 continue
-            d = "long" if direc == "Bullish" else "short"
-            k = (sym, tab, d, nc)
-            groups.setdefault(k, []).append((sig, base, row, at))
-    alerts = []
-    for (sym, tab, d, nc), rows in groups.items():
-        tfl = [r for r in rows if r[0].startswith(TFLOW_PREFIX)]
-        chosen = tfl[0] if tfl else max(rows, key=lambda r: SIGNAL_TIER[r[1]])
-        alerts.append({
-            "key": f"{sym}|{tab}|{'Bull' if d == 'long' else 'Bear'}|{nc.isoformat()}",
-            "symbol": sym, "tv_symbol": chosen[2].get("Symbol", ""), "class": instrument_class(sym), "tf": tab,
-            "direction": d, "signal": chosen[0], "also_fired": sorted({r[0] for r in rows} - {chosen[0]}),
-            "event": str(chosen[2].get("Event", "")), "tflow": parse_tflow_event(chosen[2].get("Event")) if tfl else None,
-            "nominal_close": nc, "alert_time": min(r[3] for r in rows)})
-    alerts.sort(key=lambda a: (a["nominal_close"], a["key"]))
-    return alerts, skipped
+            if p is False:
+                continue
+            sym, at = p[0], p[5]
+            nc = nominal_close(sym, tab, at)
+            in_class = instrument_class(sym) != "out"
+            if in_class and nc >= context_since:
+                ctx.append(p)
+            if nc < cutoff:
+                continue
+            counts["rows_in_window"] += 1
+            if not in_class:
+                counts["out_of_scope"] += 1
+            elif not is_judged_pair(sym, tab):
+                counts["out_of_tf"] += 1
+            else:
+                judged.append(p)
+    return {"alerts": _build_alerts(judged), "context": _build_alerts(ctx), "skipped": skipped, "counts": counts}
 
 
 def brief_bias_lookup(brief_dir=None):
@@ -941,7 +1090,7 @@ def alert_tags(a, alerts_by_tab_close, brief, calendar):
 
 def fetch_tabs():
     from scripts.fetch_google_sheet import fetch_with_service_account
-    rows, status, tflow_skipped = {}, {}, False
+    rows, status, tflow_skipped = {}, {}, {"1H": False, "4H": False}
     for tab, key in (("1H", "H1"), ("4H", "4H")):
         buf = io.StringIO()
         try:
@@ -954,7 +1103,7 @@ def fetch_tabs():
         if out:
             sys.stderr.write(out)
         if "Tflow supplement skipped" in out:
-            tflow_skipped = True
+            tflow_skipped[tab] = True
         if not r:
             status[tab] = "failed"
             rows[tab] = []
@@ -964,9 +1113,13 @@ def fetch_tabs():
     return rows, status, tflow_skipped
 
 
-def run_coverage(rows_by_tab, status, tflow_skipped, cases, days, now, brief, calendar):
+def run_coverage(rows_by_tab, status, tflow_skipped, cases, days, now, brief, calendar, judged_only=False):
+    if isinstance(tflow_skipped, dict):
+        tflow_skipped = any(tflow_skipped.values())
     since = (now - dt.timedelta(days=days)).replace(minute=0, second=0, microsecond=0)
     alerts, skipped = load_alerts(rows_by_tab, since)
+    if judged_only:
+        alerts = [a for a in alerts if is_judged_pair(a["symbol"], a["tf"])]
     by_tab = {}
     for tab in ("1H", "4H"):
         al = [a for a in alerts if a["tf"] == tab]
@@ -1021,12 +1174,12 @@ def run_coverage(rows_by_tab, status, tflow_skipped, cases, days, now, brief, ca
         "sheet": {"1H": status.get("1H"), "4H": status.get("4H"), "tflow_skipped": tflow_skipped},
         "skipped_rows": skipped,
         "alerts": {"total": len(alerts), "by_tab": {t: len(by_tab[t]["alerts"]) for t in by_tab},
-                   "by_class": {k: sum(1 for a in alerts if a["class"] == k) for k in ("fx", "metal", "index", "untracked")}},
+                   "by_class": {k: sum(1 for a in alerts if a["class"] == k) for k in CLASSES}},
         "cases": {"total": len(cases), "first_date": case_dates[0] if case_dates else None,
                   "last_date": case_dates[-1] if case_dates else None},
         "rates": rates(rows),
         "rates_by_tab": {t: rates([r for r in rows if r[0]["tf"] == t]) for t in ("1H", "4H")},
-        "rates_by_class": {k: rates([r for r in rows if r[0]["class"] == k]) for k in ("fx", "metal", "index", "untracked")},
+        "rates_by_class": {k: rates([r for r in rows if r[0]["class"] == k]) for k in CLASSES},
         "similar_component_mix": mix,
         "similar_only_htf": only_htf,
         "precedent_presenter_mix": pres_mix,
@@ -1035,6 +1188,8 @@ def run_coverage(rows_by_tab, status, tflow_skipped, cases, days, now, brief, ca
         "never_matched_tags": {k: sorted(tag_seen.get(k, set()) - tag_matched.get(k, set()))
                                for k in ("setup", "location", "htf", "risk_flags")},
         "gate": {"metric": "either", "value": rates(rows)["either"], "recommend_go_at": 60},
+        "judged_only": judged_only,
+        "no_precedent_pct": round(100.0 * sum(1 for r in rows if not (r[1] or r[2])) / len(rows), 1) if rows else None,
     }
     return report
 
@@ -1061,7 +1216,9 @@ def print_report(r):
     for t in r["top_cases"]:
         print(f"  {t['id']}: recent {t['as_recent']}, similar {t['as_similar']}")
     print("Never-matched tags:", r["never_matched_tags"])
-    print(f"GATE: {r['gate']['value']}% (recommend go at >= {r['gate']['recommend_go_at']}%)")
+    print(f"GATE: {r['gate']['value']}% (recommend go at >= {r['gate']['recommend_go_at']}%)"
+          + (" · judged pairs only" if r.get("judged_only") else ""))
+    print(f"No precedent at all (expected own-analysis share): {r.get('no_precedent_pct')}%")
 
 
 def cmd_coverage(args):
@@ -1070,7 +1227,7 @@ def cmd_coverage(args):
         log("both sheet tabs failed")
         return 3
     r = run_coverage(rows, status, tflow_skipped, load_cases(), args.days, now_sgt(), brief_bias_lookup(),
-                     load_calendar())
+                     load_calendar(), judged_only=args.judged_only)
     if args.json:
         print(json.dumps(r, indent=1))
     else:
@@ -1140,6 +1297,8 @@ def main(argv=None):
     p.add_argument("--top", type=int, default=5)
     p = sub.add_parser("coverage", help="replay recent alerts against the store")
     p.add_argument("--days", type=int, default=14)
+    p.add_argument("--judged-only", action="store_true",
+                   help="only the Phase 2 judged pairs (FX 4H; metals, oil, indices 1H)")
     p.add_argument("--json", action="store_true")
     sub.add_parser("stats", help="store counts")
     args = ap.parse_args(argv)

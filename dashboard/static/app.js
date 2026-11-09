@@ -491,6 +491,10 @@ async function viewSignals(root) {
 
   const upd = fn => () => { fn(); f.shown = 200; saveFilters(); render(); };
   const classes = ['all', ...new Set(rows.map(r => r.cls))].sort();
+  // Signal Judge ledger for this range (api() caches it ~45 s per URL, so filter changes re-render from cache)
+  const jSince = f.range === 'custom' ? f.day : f.range === 'all' ? addDays(today, -89) : start;
+  const jUntil = f.range === 'custom' ? f.day : today;
+  const J = rows.length ? await api(`/api/judge?since=${jSince}&until=${jUntil}`) : null;
   root.replaceChildren(
     h('div', { class: 'view-head' }, h('h1', null, 'TAT Signals'), h('span', { class: 'sub' }, 'Live from the TAT alert Google Sheet')),
     h('div', { class: 'filters' },
@@ -521,13 +525,7 @@ async function viewSignals(root) {
     ['Latest', filtered[0] ? h('span', null, filtered[0].sym, ' ', sigSpan(filtered[0].signal)) : '—', filtered[0] ? `${filtered[0].date} ${filtered[0].time} · ${TF_SRC[filtered[0].src]}` : ''],
   ].map(([l, v, ft]) => h('div', { class: 'kpi' }, h('div', { class: 'lbl' }, l), h('div', { class: 'val sm' }, v), h('div', { class: 'foot' }, ft)))));
 
-  // chart + most active
-  const days = f.range === 'custom' ? [f.day] : dateSpan(f.range === 'all' ? addDays(today, -59) : start, today);
-  const chartCard = card('Signals per day', f.range === 'all' ? 'last 60 days' : '');
-  const cbox = h('div'); chartCard.appendChild(cbox);
-  Charts.stacked(cbox, dayBuckets(filtered, days), [SERIES_BULL, SERIES_BEAR], { aria: 'Filtered signals per day',
-    onClick: d => { f.range = 'custom'; f.day = d.date; saveFilters(); render(); } });
-  chartCard.appendChild(h('div', { class: 'small muted', style: { marginTop: '4px' } }, 'Click a day to drill in.'));
+  // most active
   const bySym = {};
   for (const r of filtered) { const o = bySym[r.sym] || (bySym[r.sym] = { bull: 0, bear: 0 }); o[r.dir] = (o[r.dir] || 0) + 1; }
   const top = Object.entries(bySym).map(([s, o]) => ({ s, ...o, n: (o.bull || 0) + (o.bear || 0) })).sort((a, b) => b.n - a.n).slice(0, 14);
@@ -540,7 +538,12 @@ async function viewSignals(root) {
         t.bear ? h('i', { style: { width: `${100 * t.bear / maxN}%`, background: 'var(--bear)' } }) : null),
       h('span', { class: 'num small' }, `${t.n}`))) : empty('Nothing matches'),
     h('div', { class: 'legend' }, h('span', { class: 'k' }, h('i', { class: 'sw', style: { background: 'var(--bull)' } }), '▲ Bull'), h('span', { class: 'k' }, h('i', { class: 'sw', style: { background: 'var(--bear)' } }), '▼ Bear')));
-  root.appendChild(h('div', { class: 'grid g-wide' }, chartCard, actCard));
+  root.appendChild(h('div', { class: 'mt' }, actCard));
+
+  // Signal Judge card (docs/design/signal-judge.md §9)
+  const jmap = {};
+  if (J && J.entries) for (const e of J.entries) for (const m of e.match || []) jmap[m] = e;
+  root.appendChild(h('div', { class: 'mt' }, judgeCard(J, f, q)));
 
   // multi-timeframe alignment matrix (current state from the whole sheet, scoped to the filtered symbols)
   const fxSyms = new Set(filtered.filter(r => ['1H', '4H', 'D'].includes(r.src)).map(r => r.sym));
@@ -567,16 +570,61 @@ async function viewSignals(root) {
   const th = (label, k) => h('th', { class: k ? 'sortable' : '', onclick: k ? () => { f.sort = { k, d: sort.k === k ? -sort.d : -1 }; saveFilters(); render(); } : null },
     label, sort.k === k ? (sort.d > 0 ? ' ↑' : ' ↓') : '');
   const tbl = card('All signals', `${filtered.length.toLocaleString()} rows`, h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' },
-    h('thead', null, h('tr', null, th('Date / time (SGT)', 'date'), th('Instrument', 'sym'), th('Source', 'src'), th('Signal', 'signal'), th('Dir', 'dir'), th('Price', 'price'), th('Event / sector'))),
+    h('thead', null, h('tr', null, th('Date / time (SGT)', 'date'), th('Instrument', 'sym'), th('Source', 'src'), th('Signal', 'signal'), th('Dir', 'dir'), th('Price', 'price'), th('Judge'), th('Event / sector'))),
     h('tbody', null, sorted.slice(0, f.shown).map(r => h('tr', null,
       h('td', { class: 'nowrap num' }, `${r.date} ${r.time.slice(0, 5)}`),
       h('td', { class: 'nowrap' }, symChip(r.sym, r.dir), r.exch && !['EIGHTCAP', 'BATS'].includes(r.exch) ? h('span', { class: 'small muted' }, ' ' + r.exch) : null,
         r.name ? h('div', { class: 'small muted' }, r.name) : null),
       h('td', null, h('span', { class: 'tag src' }, TF_SRC[r.src])),
       h('td', null, sigSpan(r.signal)), h('td', null, dirBadge(r.dir)),
-      h('td', { class: 'num' }, r.price), h('td', { class: 'wrap small' }, r.event || r.sector)))))),
+      h('td', { class: 'num' }, r.price),
+      h('td', { class: 'nowrap' }, judgeCell(jmap[`${r.sym}|${r.src}|${r.dir}|${r.date}|${(r.time || '').slice(0, 5)}`])),
+      h('td', { class: 'wrap small' }, r.event || r.sector)))))),
     sorted.length > f.shown ? h('div', { class: 'more' }, h('button', { class: 'btn', onclick: () => { f.shown += 400; render(); } }, `Show more (${(sorted.length - f.shown).toLocaleString()} left)`)) : null);
   root.appendChild(h('div', { class: 'mt' }, tbl));
+}
+
+// ---- Signal Judge helpers
+const VERDICT_LABEL = { take: '✅ Take', wait_retest: '⏳ Wait', skip: '⛔ Skip', no_ruling: '❔ No ruling', unjudged_cap: '⚠️ Unjudged', unjudged_error: '⚠️ Unjudged' };
+function verdictBadge(e) {
+  const own = e.basis === 'own_analysis' && ['take', 'wait_retest', 'skip', 'no_ruling'].includes(e.verdict);
+  return h('span', { class: `vbadge ${e.verdict || ''}`, title: e.reason || '' }, VERDICT_LABEL[e.verdict] || e.verdict,
+    e.verdict === 'wait_retest' && e.retest_level != null ? ` @ ${e.retest_level}` : '', own ? h('span', { class: 'own' }, ' own') : null);
+}
+function judgeCell(e) {
+  if (!e) return '';
+  if (e.verdict && e.verdict !== 'pending') return verdictBadge(e);
+  return h('span', { class: 'small muted', title: e.reason || '' }, e.prefilter || '');
+}
+function judgeCard(J, f, q) {
+  if (!J) return card('Signal Judge', null, empty('Signal Judge unavailable (could not load /api/judge)'));
+  if (J.status && J.status.error) return card('Signal Judge', null, empty(`Signal Judge unavailable (${J.status.error})`));
+  if (!J.status || !J.status.ledger) return card('Signal Judge', null, empty('Signal Judge ledger not found'));
+  const rowsSc = Object.entries((J.stats && J.stats.rows) || {}).filter(([, r]) => r.n);
+  const dash = x => x == null ? '—' : x;
+  const scl = h('div', { class: 'jscore small' }, rowsSc.length ? rowsSc.map(([g, r]) => h('span', { class: 'jsc' },
+    h('b', null, g.replace(' (precedent)', ' · Binni').replace(' (own)', ' · own')), ` ${r.resolved} resolved · TP1 ${dash(r.tp1_pct)}% · avg R ${dash(r.avg_r)}`)) : '30-day scorecard: nothing resolved yet');
+  const dates = Object.keys(J.reports || {}).sort();
+  const last = dates[dates.length - 1];
+  const open = last ? h('button', { class: 'btn', onclick: () => openDoc(J.reports[last], 'Signal Judge ' + last) }, 'Open report ↗') : null;
+  const ents = J.entries.filter(e => e.verdict && e.verdict !== 'pending' && f.srcs.has(e.tf) && matches(q, e.symbol, e.signal, e.reason));
+  f.jshown = f.jshown || 50;
+  const body = ents.length ? h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' },
+    h('thead', null, h('tr', null, ['Time', 'Instrument', 'TF', 'Signal', 'Verdict', 'Basis', 'Entry / SL / TP1', 'R:R', 'Outcome', 'Reason'].map(c => h('th', null, c)))),
+    h('tbody', null, ents.slice(0, f.jshown).map(e => h('tr', null,
+      h('td', { class: 'nowrap num' }, (e.alert_time || '').slice(5, 16).replace('T', ' ')),
+      h('td', { class: 'nowrap' }, symChip(e.symbol, e.direction)),
+      h('td', null, h('span', { class: 'tag src' }, e.tf)),
+      h('td', null, sigSpan(e.signal)),
+      h('td', { class: 'nowrap' }, verdictBadge(e)),
+      h('td', { class: 'small' }, e.basis === 'own_analysis' ? 'Own' : e.basis === 'precedent' ? 'Binni' : ''),
+      h('td', { class: 'num nowrap' }, [e.entry, e.sl, e.tp1].map(x => x == null ? '—' : +(+x).toPrecision(6)).join(' / ')),
+      h('td', { class: 'num' }, e.rr ? `1:${e.rr}` : 'open'),
+      h('td', { class: 'nowrap small' }, e.tracked ? `${e.outcome || ''}${e.r != null ? ' ' + e.r + 'R' : ''}` : 'untracked'),
+      h('td', { class: 'small ellip', title: e.reason || '' }, e.reason || '')))))) : empty('No judged signals in this range');
+  const more = ents.length > f.jshown ? h('div', { class: 'more' }, h('button', { class: 'btn', onclick: () => { f.jshown += 100; render(); } }, `Show more (${ents.length - f.jshown} left)`)) : null;
+  const note = J.status.truncated ? h('div', { class: 'small muted' }, `Judge data shows the newest 5,000 of ${J.status.truncated} alerts`) : null;
+  return card('Signal Judge', open, scl, note, body, more);
 }
 
 // ============================================================ views: ANALYSIS

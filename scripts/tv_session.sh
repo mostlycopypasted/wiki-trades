@@ -44,9 +44,20 @@ cd "$MCP_DIR"
 # way out. This is a pragmatic serialization fix, not an airtight
 # mutual-exclusion guarantee — it eliminates the common accidental-collision
 # case without reintroducing an indefinite wait.
-LOCK_DIR="/tmp/tradingview-desktop-cdp.lock"
+# Match only TradingView's own processes (main app + helpers) by executable path,
+# anchored to the start of the command line. A bare `-f TradingView` also matched
+# every Orca/Claude agent whose prompt mentions TradingView, so `pkill -9` here
+# SIGKILLed concurrent agents mid-run (root-caused 2026-11-05).
+TV_PROC_RE='^[^ ]*/TradingView\.app/Contents/'
+LOCK_DIR="${TV_LOCK_DIR:-/tmp/tradingview-desktop-cdp.lock}"   # TV_LOCK_DIR: tests only
 LOCK_STALE_SECS=1800    # 30min — above the documented 15-25min worst-case batch
-LOCK_MAX_WAIT_SECS=600  # 10min — wait for a concurrent batch to finish before giving up
+LOCK_MAX_WAIT_SECS=${TV_LOCK_MAX_WAIT_SECS:-600}  # 10min — wait for a concurrent batch to finish before giving up
+# Opt-in env vars for callers that must not collide (the Signal Judge, scripts/signal_judge.py);
+# with none of them set this script behaves exactly as before:
+#   TV_LOCK_MAX_WAIT_SECS   lock wait (default 600)
+#   TV_LOCK_FAIL_ON_TIMEOUT=1  when the wait runs out: print the holder and exit 75 (no launch)
+#   TV_LOCK_OWNER=<token>   start tags the lock with owner=<token> and quits TradingView itself if
+#                           it fails after launching; stop only acts when the lock is still ours
 LOCK_GRACE_SECS=20      # give a freshly-acquired lock time to actually launch TradingView
                         # before anyone treats "not running yet" as stale — otherwise a second
                         # waiter could steal the lock in the brief launch window and race the
@@ -75,21 +86,49 @@ acquire_tv_lock() {
             announced=true
         fi
         if [ "$waited" -ge "$LOCK_MAX_WAIT_SECS" ]; then
+            if [ "${TV_LOCK_FAIL_ON_TIMEOUT:-}" = "1" ]; then
+                echo "⛔ Waited ${LOCK_MAX_WAIT_SECS}s for the TradingView CDP lock, still held ($holder_info) — not launching."
+                exit 75
+            fi
             echo "⚠️ Waited ${LOCK_MAX_WAIT_SECS}s for the TradingView CDP lock and it's still held — proceeding anyway (collision risk accepted rather than blocking indefinitely)."
             return 0
         fi
         sleep 5
         waited=$((waited + 5))
     done
-    echo "pid=$$ script=$(basename "$0") started=$(date '+%Y-%m-%d %H:%M:%S')" > "$LOCK_DIR/info"
+    echo "pid=$$ script=$(basename "$0") started=$(date '+%Y-%m-%d %H:%M:%S')${TV_LOCK_OWNER:+ owner=$TV_LOCK_OWNER}" > "$LOCK_DIR/info"
 }
 
 release_tv_lock() {
     rm -rf "$LOCK_DIR"
 }
 
+# Graceful quit, then pkill after 3 s (shared by stop and an owned start that fails).
+quit_tv() {
+    echo "🚪 Requesting graceful quit for TradingView..."
+    osascript -e 'tell application "TradingView" to quit' > /dev/null 2>&1 || node src/cli/index.js ui keyboard q --meta > /dev/null 2>&1 || true
+    sleep 3
+
+    TV_PIDS=$(pgrep -f "$TV_PROC_RE" || true)
+    if [ -n "$TV_PIDS" ]; then
+        echo "⚠️ TradingView process ($TV_PIDS) still active after 3s; executing pkill..."
+        pkill -9 -f "$TV_PROC_RE" || true
+    else
+        echo "✅ TradingView closed gracefully."
+    fi
+}
+
+lock_is_ours() {
+    [ -d "$LOCK_DIR" ] && grep -qE "owner=${TV_LOCK_OWNER}( |\$)" "$LOCK_DIR/info" 2>/dev/null
+}
+
 if [ "$ACTION" = "start" ]; then
     acquire_tv_lock
+    if [ -n "${TV_LOCK_OWNER:-}" ]; then
+        # An owned start that dies after this point (explicit exit 1 or an unguarded set -e
+        # failure) must not leave TradingView open. Disarmed just before start succeeds.
+        trap 'echo "⚠️ start failed — quitting TradingView (owner $TV_LOCK_OWNER)"; quit_tv; release_tv_lock' EXIT
+    fi
     echo "🚀 Starting TradingView session with CDP enabled..."
     if node src/cli/index.js launch > /dev/null 2>&1; then
         LAUNCH_EXIT=0
@@ -161,8 +200,14 @@ if [ "$ACTION" = "start" ]; then
     # 2026-08-05: a backgrounded/occluded window silently blanks every chart
     # screenshot while everything else, incl. `state` checks, reports fine).
     node "$WIKI_DIR/scripts/force_tv_visible.mjs" 2>&1 || true
+    [ -n "${TV_LOCK_OWNER:-}" ] && trap - EXIT
+    true
 
 elif [ "$ACTION" = "stop" ]; then
+    if [ -n "${TV_LOCK_OWNER:-}" ] && ! lock_is_ours; then
+        echo "not the lock owner; leaving TradingView alone"
+        exit 0
+    fi
     # Captures render as Line (capture_tv_chart.sh sets it per chart — see the
     # Chart Type Standard in CLAUDE.md), but the user reads the chart as
     # candlesticks when they open TradingView themselves. Restore the resting
@@ -170,7 +215,7 @@ elif [ "$ACTION" = "stop" ]; then
     # launch, including after a reboot — comes up as Candles. Override with
     # RESTORE_CHART_TYPE=<type>, or RESTORE_CHART_TYPE= (empty) to skip.
     RESTORE_CHART_TYPE="${RESTORE_CHART_TYPE-Candles}"
-    if [ -n "$RESTORE_CHART_TYPE" ] && pgrep -f TradingView > /dev/null 2>&1; then
+    if [ -n "$RESTORE_CHART_TYPE" ] && pgrep -f "$TV_PROC_RE" > /dev/null 2>&1; then
         echo "🕯️ Restoring chart type to $RESTORE_CHART_TYPE..."
         node src/cli/index.js type "$RESTORE_CHART_TYPE" > /dev/null 2>&1 || true
         RESTORED=$(node src/cli/index.js type 2>/dev/null | grep -o '"chart_type": *"[^"]*"' | head -1 | sed 's/.*"chart_type": *"//;s/"$//')
@@ -185,17 +230,7 @@ elif [ "$ACTION" = "stop" ]; then
     node src/cli/index.js ui keyboard s --meta > /dev/null 2>&1 || true
     sleep 1.5
 
-    echo "🚪 Requesting graceful quit for TradingView..."
-    osascript -e 'tell application "TradingView" to quit' > /dev/null 2>&1 || node src/cli/index.js ui keyboard q --meta > /dev/null 2>&1 || true
-    sleep 3
-
-    TV_PIDS=$(pgrep -f TradingView || true)
-    if [ -n "$TV_PIDS" ]; then
-        echo "⚠️ TradingView process ($TV_PIDS) still active after 3s; executing pkill..."
-        pkill -9 -f TradingView || true
-    else
-        echo "✅ TradingView closed gracefully."
-    fi
+    quit_tv
     release_tv_lock
 else
     echo "Unknown action: $ACTION. Use 'start' or 'stop'."

@@ -8,6 +8,7 @@ Read-only except the trade journal form: POST /api/journal/{new,comment,close} r
 (the journal's only writer). Nothing else here writes to wiki/ or raw/. Binds to localhost by default.
 """
 import argparse
+import datetime as dt
 import gzip
 import json
 import mimetypes
@@ -82,6 +83,18 @@ def api_tat_latest(q):
 def api_dsig(q):
     date = q.get("date") or (W.list_dsig_dates() or [None])[0]
     return W.parse_daily_signals_report(date) if date else None
+
+
+def api_judge(q):
+    today = dt.datetime.now(W.SGT).date()
+    try:
+        until = dt.date.fromisoformat(q["until"]) if q.get("until") else today
+        since = dt.date.fromisoformat(q["since"]) if q.get("since") else until - dt.timedelta(days=6)
+    except ValueError:
+        return {"error": "bad date"}, 400
+    if since > until:
+        return {"error": "bad date"}, 400
+    return W.signal_judge(since, until)
 
 
 def api_doc(q):
@@ -172,6 +185,7 @@ ROUTES = {
     "/api/journal": lambda q: W.all_journal(),
     "/api/journal-meta": journal_meta,
     "/api/doc": api_doc,
+    "/api/judge": api_judge,
     "/api/fedwatch": lambda q: FED.fedwatch(refresh=q.get("refresh") == "1"),
     "/api/news": lambda q: NEWS.news(refresh=q.get("refresh") == "1"),
     "/api/my-watchlist": lambda q: W.my_watchlist_gallery(),
@@ -197,6 +211,8 @@ class Handler(BaseHTTPRequestHandler):
                 data = ROUTES[url.path](q)
                 if data is None:
                     return self.send_json({"error": "not found"}, 404)
+                if isinstance(data, tuple):  # (data, status): only /api/judge's 400 uses it
+                    return self.send_json(data[0], data[1])
                 return self.send_json(data)
             if url.path.startswith("/images/"):
                 return self.send_file(safe_join(W.IMAGES, url.path[len("/images/"):]), cache=86400)

@@ -1179,3 +1179,108 @@ def all_journal():
         sys.path.insert(0, str(ROOT))
     from scripts import journal  # noqa
     return journal.load_all()
+
+
+# --------------------------------------------------------------------------- Signal Judge (/api/judge)
+# Reads the live judge's ledger shards (wiki/notes/signal-judge/ledger-YYYY-MM.json, written by
+# scripts/signal_judge.py) and lists the day reports. Read-only. Parsed shards are cached on
+# (path, mtime), so the Signals tab's auto-refresh costs one stat per shard.
+
+_JUDGE_CACHE = {}
+
+
+def _judge_dirs():
+    data = Path(os.environ.get("SIGNAL_JUDGE_DATA_DIR") or WIKI / "notes" / "signal-judge")
+    rep = Path(os.environ.get("SIGNAL_JUDGE_REPORT_DIR") or WIKI / "reports" / "tat_analysis" / "signal_judge")
+    return data, rep
+
+
+def _judge_shard(p):
+    mt = p.stat().st_mtime
+    hit = _JUDGE_CACHE.get(str(p))
+    if hit and hit[0] == mt:
+        return hit[1]
+    d = json.loads(p.read_text(encoding="utf-8"))
+    entries = d.get("entries") if isinstance(d, dict) else None
+    if not isinstance(entries, list):
+        raise ValueError("%s is not a ledger shard" % p.name)
+    _JUDGE_CACHE[str(p)] = (mt, entries)
+    return entries
+
+
+def signal_judge(since, until):
+    """-> {"status", "entries", "reports", "stats"} for /api/judge (docs/design/signal-judge.md §9)."""
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from scripts.signal_judge_stats import scorecard
+    data_dir, rep_dir = _judge_dirs()
+    out = {"status": {"ledger": False, "mtime": None, "error": None, "truncated": None},
+           "entries": [], "reports": {}, "stats": {}}
+    months = []
+    y, m = since.year, since.month - 1
+    if m == 0:
+        y, m = y - 1, 12
+    while (y, m) <= (until.year, until.month):
+        months.append("%04d-%02d" % (y, m))
+        y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+    stat_since = until - dt.timedelta(days=30)
+    for k in range(2):  # scorecard window may reach further back than the range
+        yy, mm = stat_since.year, stat_since.month - k
+        if mm <= 0:
+            yy, mm = yy - 1, mm + 12
+        tag = "%04d-%02d" % (yy, mm)
+        if tag not in months:
+            months.append(tag)
+    shards = [data_dir / ("ledger-%s.json" % mo) for mo in sorted(months)]
+    shards = [p for p in shards if p.exists()]
+    if not shards:
+        return out
+    entries = []
+    try:
+        for p in shards:
+            entries.extend(_judge_shard(p))
+    except Exception as e:
+        out["status"].update(ledger=True, error="%s: %s" % (type(e).__name__, e))
+        return out
+    out["status"]["ledger"] = True
+    out["status"]["mtime"] = dt.datetime.fromtimestamp(max(p.stat().st_mtime for p in shards), SGT).isoformat(timespec="seconds")
+
+    def in_range(e):
+        dates = {_norm_date(r[0]) for r in e.get("row_times") or [] if r}
+        if not dates and e.get("alert_time"):
+            dates = {e["alert_time"][:10]}
+        return any(since.isoformat() <= d <= until.isoformat() for d in dates)
+
+    sel = sorted([e for e in entries if in_range(e)], key=lambda e: e.get("alert_time") or "", reverse=True)
+    if len(sel) > 5000:
+        out["status"]["truncated"] = len(sel)
+        sel = sel[:5000]
+    for e in sel:
+        o = e.get("outcome") or {}
+        j = e.get("judge") or {}
+        v = e.get("verdict")
+        if v in ("take", "wait_retest", "skip", "no_ruling"):
+            reason = j.get("reason")
+        elif v in ("unjudged_cap", "unjudged_error"):
+            reason = j.get("error") or "cap"
+        else:
+            reason = e.get("prefilter_detail")
+        d = "bull" if e.get("direction") == "Bullish" else "bear"
+        match = []
+        for r in e.get("row_times") or []:
+            if len(r) >= 2:
+                sym = _norm_sym(r[2] if len(r) > 2 and r[2] else e.get("tv_symbol"), e.get("tf"))[0]
+                match.append("%s|%s|%s|%s|%s" % (sym, e.get("tf"), d, _norm_date(r[0]), _norm_time(r[1])[:5]))
+        out["entries"].append({
+            "key": e.get("key"), "match": match, "symbol": e.get("symbol"), "tf": e.get("tf"), "direction": d,
+            "signal": e.get("signal"), "alert_time": e.get("alert_time"), "prefilter": e.get("prefilter"),
+            "verdict": v, "basis": j.get("basis"), "retest_level": e.get("retest_level"),
+            "entry": o.get("entry") if o.get("entry") is not None else (e.get("entry_ref") or {}).get("price"),
+            "sl": e.get("sl"), "tp1": e.get("tp1"), "rr": e.get("rr"), "tracked": bool(e.get("tracked")),
+            "outcome": o.get("status"), "r": o.get("r"), "mfe_r": o.get("mfe_r"), "reason": reason})
+    if rep_dir.is_dir():
+        for p in sorted(rep_dir.glob("*-signal-judge.md")):
+            out["reports"][p.name[:10]] = "reports/tat_analysis/signal_judge/" + p.name
+    start = dt.datetime.combine(stat_since, dt.time(), SGT)
+    out["stats"] = scorecard(entries, start)
+    return out

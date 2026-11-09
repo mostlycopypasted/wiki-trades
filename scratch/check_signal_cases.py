@@ -373,10 +373,10 @@ for a, want in ((sat, True), (fri, True), (thu, False)):
 
 # ---------------------------------------------------------------- coverage end to end (gate)
 now = dt.datetime(2026, 11, 2, 20, tzinfo=SGT)
-rows = {"4H": [row("EIGHTCAP:GBPUSD", "Tflow LBull", "10:00:05", d="2026-11-01", direc="Bullish",
+rows = {"4H": [row("EIGHTCAP:GBPUSD", "Tflow LBull", "09:00:05", d="2026-11-01", direc="Bullish",
                    ev="Tflow Bullish Signal @Zone (Support Zone x2 (W,M), Zone High: 1.3, Zone Low: 1.29): "
                       "D Level: 1.31, LL: 1.295. Filtered: None."),
-               row("EIGHTCAP:AUDCAD", "OptBear", "14:00:03", d="2026-11-01"),
+               row("EIGHTCAP:AUDCAD", "OptBear", "13:00:03", d="2026-11-01"),
                row("EIGHTCAP:NDQ100", "LBull", "18:00:02", d="2026-11-01", direc="Bullish")],
         "1H": [row("EIGHTCAP:EURUSD", "SBull", "9:00:11", d="2026-11-02", direc="Bullish")]}
 store = [dict(base, id="r1", date="2026-10-28", instrument="GBPUSD"),
@@ -395,13 +395,14 @@ ok(rep["rates"]["either"] == 50.0 and rep["gate"]["value"] == 50.0, "gate")
 ok(rep["similar_only_htf"] == 1, f"only-htf {rep['similar_only_htf']}")
 ok(rep["top_cases"][0]["id"] in ("s1", "s2", "s3", "s4", "r1"), "top cases")
 ok(rep["rates_by_tab"]["1H"]["either"] == 0.0 and rep["rates_by_class"]["index"]["either"] == 0.0, "splits")
-ok(rep["alerts_range"]["first"].startswith("2026-11-01T10:00"), "alerts_range from deduped alerts")
+ok(rep["alerts_range"]["first"].startswith("2026-11-01T09:00"), "alerts_range from deduped alerts (NY 4H grid)")
 
 # ---------------------------------------------------------------- fetch failure
 import scripts.fetch_google_sheet as FG  # noqa: E402
 orig = FG.fetch_with_service_account
 FG.fetch_with_service_account = lambda key: None if key == "H1" else [row("EIGHTCAP:GBPUSD", "LBull", "10:00", d="2026-11-02", direc="Bullish")]
-rows2, st, _ = S.fetch_tabs()
+rows2, st, tfs = S.fetch_tabs()
+ok(tfs == {"1H": False, "4H": False}, f"per-tab tflow flag {tfs}")
 ok(st == {"1H": "failed", "4H": "ok"}, f"None tab failed {st}")
 FG.fetch_with_service_account = lambda key: None
 code, _, _ = run(["coverage"])

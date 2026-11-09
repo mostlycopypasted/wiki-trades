@@ -22,7 +22,7 @@ const TIMEOUT_MS = 15000;
 
 const MCP_DIR = `${process.env.HOME}/tradingview-mcp`;
 
-async function forceVisible() {
+export async function forceVisible() {
   const conn = await import(`${MCP_DIR}/src/connection.js`);
   const client = await conn.getClient();
   await client.Emulation.setFocusEmulationEnabled({ enabled: true });
@@ -50,21 +50,27 @@ async function forceVisible() {
   return conn.evaluate('document.hidden');
 }
 
-let hidden;
-try {
-  hidden = await Promise.race([
-    forceVisible(),
-    new Promise((_, reject) => setTimeout(() => reject(new Error(`timed out after ${TIMEOUT_MS}ms`)), TIMEOUT_MS)),
-  ]);
-} catch (err) {
-  console.error(`⚠️ force_tv_visible failed: ${err.message}`);
-  process.exit(1);
-}
+// Run as a script (tv_session.sh, capture_tv_chart.sh); importing this module (the Signal
+// Judge's tv_judge_pass.mjs) only exposes forceVisible().
+import { pathToFileURL } from 'node:url';
 
-if (hidden) {
-  console.error('⚠️ TradingView page still reports hidden after forcing visible state');
-  process.exit(1);
-} else {
-  console.log('✅ TradingView page visibility forced active');
-  process.exit(0);
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  let hidden;
+  try {
+    hidden = await Promise.race([
+      forceVisible(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`timed out after ${TIMEOUT_MS}ms`)), TIMEOUT_MS)),
+    ]);
+  } catch (err) {
+    console.error(`⚠️ force_tv_visible failed: ${err.message}`);
+    process.exit(1);
+  }
+
+  if (hidden) {
+    console.error('⚠️ TradingView page still reports hidden after forcing visible state');
+    process.exit(1);
+  } else {
+    console.log('✅ TradingView page visibility forced active');
+    process.exit(0);
+  }
 }
