@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Usage: ./scripts/capture_tv_chart.sh <SYMBOL> <TIMEFRAME> [OUTPUT_NAME] [--standalone]
-# Env:   CHART_TYPE=Line|Candles|Bars|Area|HeikinAshi|...  (default: Line)
+# Env:   CHART_TYPE=Candles|Line|Bars|Area|HeikinAshi|...  (default: Candles)
 # Example: ./scripts/capture_tv_chart.sh EIGHTCAP:GBPAUD 60
 # Outputs: wiki/images/YYMMDD-HHMMSS_gbpaud_1h_chart.png
 
@@ -155,14 +155,13 @@ if [ "$RESOLUTION_CONFIRMED" != true ]; then
     echo "⚠️ Could not confirm timeframe '$TF' after 3 attempts — screenshot may show the wrong resolution."
 fi
 
-# 1c. Set the chart type. Defaults to Line — the wiki's charts are read for
-# structure (HH/HL/LH/LL, impulse confirmation, level breaks), and a line chart
-# strips intrabar noise that obscures those reads. Override per call with
-# CHART_TYPE=Candles (valid: Bars, Candles, Line, Area, HeikinAshi,
-# HollowCandles, Renko, Kagi, PointAndFigure, LineBreak).
+# 1c. Set the chart type. Defaults to Candles (user decision 2026-11-09; it was
+# Line from 2026-09-24). Override per call with CHART_TYPE=Line (valid: Bars,
+# Candles, Line, Area, HeikinAshi, HollowCandles, Renko, Kagi, PointAndFigure,
+# LineBreak).
 # Set after the timeframe is confirmed: a resolution change re-renders the pane
 # and can revert a type set that ran before it.
-CHART_TYPE="${CHART_TYPE:-Line}"
+CHART_TYPE="${CHART_TYPE:-Candles}"
 TYPE_CONFIRMED=false
 for attempt in 1 2 3; do
     run_cli type "$CHART_TYPE" || true
