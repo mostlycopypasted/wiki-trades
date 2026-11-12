@@ -4,12 +4,12 @@ Daily Signals scanner — the data layer for the `daily-signal-tracker` skill (v
 retitled "Daily Signals").
 
 Pulls the three Daily-timeframe signal sources out of Binni's Google Sheet, normalizes
-their two different schemas into one row shape, applies the 05:01 SGT date window
+their two different schemas into one row shape, applies the 06:01 SGT date window (05:01 in US daylight saving)
 (Asian stocks offset one day back), dedupes, and emits JSON for the agent to screenshot
 and report on.
 
 Sources (see scripts/fetch_google_sheet.py GIDS):
-    Forex              gid 462165474  tab "Forex D"     fires 05:00-05:01 SGT
+    Forex              gid 462165474  tab "Forex D"     fires 06:01 SGT (05:01 US DST)
     TradingView Stocks gid 520189562  tab "bats"        fires 04:01 SGT
     Yahoo Stocks       gid 1875176436 tab "Bull Daily"  + gid 1088333741 "Bear Daily"
 
@@ -33,12 +33,21 @@ import argparse
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scripts.fetch_google_sheet import fetch_sheet_records
 
 SGT = timezone(timedelta(hours=8))
+NY = ZoneInfo("America/New_York")
+
+# Forex race guard: how long after the Daily close to keep waiting for Forex D rows.
+# Alerts are stamped HH:01:0x, but the sheet write lags; on 2026-11-10..12 a 06:02
+# fetch still saw none. Retry every RETRY_SLEEP_SECS while inside the window.
+FOREX_GUARD_WINDOW_MINS = 10
+FOREX_GUARD_SLEEP_SECS = 90
+FOREX_GUARD_MAX_TRIES = 5
 SEEN_FILE = Path(__file__).resolve().parent / "daily_signal_seen.json"
 SEEN_RETENTION_DAYS = 45
 
@@ -245,7 +254,7 @@ def save_seen(state, rows, run_date):
 # ---------------------------------------------------------------- windowing
 
 def in_window(row, run_date, start_date):
-    """Asian stocks close 17:00 SGT — after that day's 05:01 run — so their signals
+    """Asian stocks close 17:00 SGT — after that day's morning run — so their signals
     are first visible to the NEXT morning's run and sit one calendar day back."""
     d = row["date"]
     if is_asian(row["market"]):
@@ -259,21 +268,33 @@ def shift(date_str, days):
 
 # ---------------------------------------------------------------- main
 
-def collect(run_date, start_date, forex_retry=False):
+def forex_daily_close_sgt(run_date):
+    """The forex Daily bar closes 17:00 New York on the evening before run_date (SGT):
+    06:00 SGT in US standard time, 05:00 SGT in US daylight saving."""
+    d = datetime.strptime(run_date, "%Y-%m-%d") - timedelta(days=1)
+    return datetime(d.year, d.month, d.day, 17, 0, tzinfo=NY).astimezone(SGT)
+
+
+def collect(run_date, start_date, forex_retry=False, _tries=0):
     rows = []
     for source_key, source_label, tab_key, schema in SOURCES:
         rows.extend(build_rows(source_key, source_label, tab_key, schema))
     rows = dedupe(rows)
     windowed = [r for r in rows if in_window(r, run_date, start_date)]
 
-    # 05:01 race guard: Forex alerts write at 05:01:02-05:01:04, seconds after the run
-    # starts. An empty Forex window this early means "not yet", not "nothing today".
+    # Forex race guard: Forex alerts are stamped a minute after the Daily close
+    # (06:01 SGT in US standard time, 05:01 in US daylight saving) and reach the
+    # sheet a little later. An empty Forex window this soon after the close means
+    # "not yet", not "nothing today".
     if forex_retry and not any(r["source"] == "forex" for r in windowed):
         now = datetime.now(SGT)
-        if now.strftime("%Y-%m-%d") == run_date and now.hour == 5 and now.minute < 2:
-            print("⏳ No Forex rows yet and it is before 05:02 SGT — waiting 90s for the alert write, then refetching once.", file=sys.stderr)
-            time.sleep(90)
-            return collect(run_date, start_date, forex_retry=False)
+        close = forex_daily_close_sgt(run_date)
+        if close <= now < close + timedelta(minutes=FOREX_GUARD_WINDOW_MINS) and _tries < FOREX_GUARD_MAX_TRIES:
+            print(f"⏳ No Forex rows yet and it is within {FOREX_GUARD_WINDOW_MINS} min of the "
+                  f"{close:%H:%M} SGT Daily close — waiting {FOREX_GUARD_SLEEP_SECS}s, then refetching "
+                  f"(try {_tries + 1}/{FOREX_GUARD_MAX_TRIES}).", file=sys.stderr)
+            time.sleep(FOREX_GUARD_SLEEP_SECS)
+            return collect(run_date, start_date, forex_retry=True, _tries=_tries + 1)
     return windowed
 
 
@@ -303,7 +324,7 @@ def main():
     parser.add_argument("--json", action="store_true", help="Emit the full normalized rows as JSON")
     parser.add_argument("--commit", action="store_true", help="Record these rows in the seen-set")
     parser.add_argument("--all", action="store_true", help="Ignore the seen-set (show everything in the window)")
-    parser.add_argument("--no-retry", action="store_true", help="Skip the 05:01 Forex race guard")
+    parser.add_argument("--no-retry", action="store_true", help="Skip the Forex race guard (waits for Forex D rows just after the Daily close)")
     parser.add_argument("--capture-list", action="store_true", help="Emit 'TV_SYMBOL IMAGE_SLUG' lines, one per unique chart to screenshot")
     args = parser.parse_args()
 

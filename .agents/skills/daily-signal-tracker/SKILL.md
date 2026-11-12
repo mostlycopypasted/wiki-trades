@@ -31,7 +31,7 @@ All three live in the same Google Sheet (`1XQc0TFDvihNN7wSNBBJom5rh5W-D6msm24gaM
 
 | Source | gid | Real tab title | Fires | Key |
 |---|---|---|---|---|
-| **Forex** | `462165474` | `Forex D` | 05:00–05:01 SGT | `FOREX_D` |
+| **Forex** | `462165474` | `Forex D` | 06:01 SGT (05:01 in US daylight saving) | `FOREX_D` |
 | **TradingView Stocks** | `520189562` | `bats` | 04:01 SGT | `BATS` |
 | **Yahoo Stocks** (bull half) | `1875176436` | `Bull Daily` | no time recorded | `BULL_DAILY` |
 | **Yahoo Stocks** (bear half) | `1088333741` | `Bear Daily` | no time recorded | `BEAR_DAILY` |
@@ -70,15 +70,15 @@ The script pulls all four tabs, normalizes both schemas, applies the date window
 
 | Source | Rows taken | Why |
 |---|---|---|
-| Forex D | dated `D` | daily bar closes 05:00 SGT, alert writes 05:00–05:01 |
+| Forex D | dated `D` | daily bar closes 06:00 SGT (05:00 in US daylight saving), alerts stamped 06:01 |
 | bats | dated `D` | US close, writes 04:01 SGT |
 | Yahoo, **US** symbols | dated `D` | same US close |
-| Yahoo, **SGX/HKEX** symbols | dated **`D−1`** | SGX/HKEX close 17:00 SGT — *after* that day's 05:01 run |
+| Yahoo, **SGX/HKEX** symbols | dated **`D−1`** | SGX/HKEX close 17:00 SGT — *after* that day's morning run |
 
 The Asian offset is gap-free and overlap-free: a `.SI`/`.HK` row dated `D−1` is first visible to the run on `D`, because the run on `D−1` was looking at `D−2`. Verified live: `O39.SI` dated 23/09 (fired ~17:00 SGT that day) correctly belongs to the 24/09 run, not the 23/09 one.
 
 **Two guards, both built into the script:**
-- *05:01 race.* Forex rows land at `05:01:02`–`05:01:04`. At the scheduled 05:45 slot this is long settled, but the guard protects ad hoc runs launched at 05:0x: if the Forex window is empty and it is before 05:02 SGT, the script waits 90s and refetches once. `--no-retry` disables it.
+- *Forex race guard.* Forex rows are stamped `HH:01:0x` just after the Daily close (06:00 SGT in US standard time, 05:00 in US daylight saving; the script derives it from 17:00 New York) but reach the sheet a minute or more later — a 06:02 fetch saw none on 2026-11-10/11/12. In the Morning Pipeline (Part B starts ~06:25) this is long settled; the guard protects ad hoc runs: if the Forex window is empty and it is within 10 min after the close, the script waits 90 s and refetches, up to 5 times. Before the close it does not wait. `--no-retry` disables it.
 - *Weekends and missed runs.* `scripts/daily_signal_seen.json` holds a watermark plus a 45-day seen-set keyed `source|date|instrument|signal`. The sweep runs from the watermark forward, so a skipped run or a long weekend backfills rather than silently dropping signals. Use `--backfill-from YYYY-MM-DD` to force a wider sweep.
 
 > `scripts/daily_signal_seen.json` is a **dedupe ledger, not watch state**. If it is missing, the run will treat every signal in the window as new — that is recoverable, but say so in the log rather than pretending it was a normal run. If it is present but corrupt, the script exits rather than recreating it.
