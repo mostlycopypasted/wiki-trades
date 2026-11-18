@@ -1,6 +1,6 @@
 ---
 name: daily-signal-tracker
-description: Daily Signals — a once-daily morning snapshot (Orca automation fires 05:45 SGT Mon–Sat; 05:01 SGT is the data-window reference, not the clock time) of every Daily-timeframe TAT signal across three sources (Forex D, TradingView Stocks/bats, and the Yahoo Bull+Bear stock lists), with a chart screenshot per instrument and a single dated report at wiki/reports/daily-signals/YYYY-MM-DD_Daily_Signals.md. Daily timeframe only — no Weekly state read, no 1H/4H confluence, no multi-day watch tracking. Asian (SGX/HKEX) stocks are taken from the previous calendar day because they close at 17:00 SGT, after the run. The Daily-timeframe counterpart to tat-alert-analysis (H1/4H, 5x-daily) and equity-news-finder (equity news).
+description: Daily Signals — a once-daily morning snapshot (runs as Part B of the Orca "Daily Brief + Daily Signals (Morning Pipeline)" automation at 06:01 SGT Mon–Sat, right after the Daily Brief; 06:01 SGT is the data-window reference) of every Daily-timeframe TAT signal across three sources (Forex D, TradingView Stocks/bats, and the Yahoo Bull+Bear stock lists), with a chart screenshot per instrument and a single dated report at wiki/reports/daily-signals/YYYY-MM-DD_Daily_Signals.md. Daily timeframe only — no Weekly state read, no 1H/4H confluence, no multi-day watch tracking. Asian (SGX/HKEX) stocks are taken from the previous calendar day because they close at 17:00 SGT, after the run. The Daily-timeframe counterpart to tat-alert-analysis (H1/4H, 5x-daily) and equity-news-finder (equity news).
 license: MIT
 metadata:
   author: AI Trading Team
@@ -17,7 +17,7 @@ metadata:
 
 # Daily Signals Skill
 
-Runs **once per day**. The Orca automation **"Daily Signals"** fires at **05:45 SGT, Mon–Sat** (`rrule: 45 5 * * 1-6`). **05:01 SGT is the data-window reference, not the run time** — the forex Daily bar closes 05:00 SGT and its alerts write at 05:01, which is what defines *which* signals belong to a given day. The run itself is deliberately offset to 05:45 to clear the Daily Brief / Morning Pipeline (05:01) and the TAT Combined 1H+4H review (05:31): all three drive the same TradingView session, and a ~45-chart batch racing either of them is the failure CLAUDE.md's Batch TradingView Session Rule exists to prevent.
+Runs **once per day**. Since 2026-11-05 it runs as **Part B of the Orca automation "Daily Brief + Daily Signals (Morning Pipeline)"** (`03241164`, `rrule: 1 6 * * 1-6`, 06:01 SGT Mon–Sat; 05:01 in US daylight-saving season): the same session runs the Daily Brief first and starts Daily Signals only after the brief's TradingView session has closed, typically ~06:25–06:35. The standalone "Daily Signals" automation (`b64e9d36`, 06:45) is disabled and kept only for rollback. **06:01 SGT is the data-window reference, not the run time** — the forex Daily bar closes 06:00 SGT (05:00 in US daylight saving) and its alerts write at 06:01, which is what defines *which* signals belong to a given day. Running the brief and this skill in sequence inside one session is what keeps a ~45-chart batch from racing the brief on TradingView, the failure CLAUDE.md's Batch TradingView Session Rule exists to prevent.
 
 Detects every new Daily-timeframe signal across the three sources below, screenshots each instrument's Daily chart once, and files a single dated report.
 
