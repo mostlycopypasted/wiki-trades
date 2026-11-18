@@ -13,6 +13,8 @@ import os
 import re
 import datetime
 import subprocess
+import time
+import json
 from pathlib import Path
 
 from report_toc import build_toc
@@ -35,6 +37,12 @@ def run_command(cmd, cwd=WIKI_ROOT):
     print(f"🚀 Running: {' '.join(cmd)}")
     res = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
     out = res.stdout
+    # Surface child warnings (e.g. build_daily_bias.py's "exposes no Up/Down Trend
+    # plot", which goes to stderr) in this script's own output/log; the rest of
+    # stderr stays suppressed as before.
+    for line in (res.stderr or "").splitlines():
+        if line.startswith("⚠️"):
+            print(line)
     clean_lines = [l for l in out.splitlines() if not l.startswith("  ℹ️") and not l.startswith("🔑") and not l.startswith("✅ Successfully")]
     return "\n".join(clean_lines).strip()
 
@@ -218,6 +226,19 @@ def extract_cs_extremes(text):
     return strongest, weakest
 
 
+def scan_study_coverage(dump_path):
+    """(symbols whose indicators were actually read, symbols scanned) for a tv brief dump."""
+    try:
+        text = Path(dump_path).read_text(encoding="utf-8")
+        if not text.lstrip().startswith("{"):
+            text = text.split("\n", 1)[1]
+        entries = json.loads(text).get("symbols_scanned", [])
+    except Exception:
+        return 0, 0
+    ok = sum(1 for e in entries if (e.get("indicators") or {}).get("study_count", 0) > 0)
+    return ok, len(entries)
+
+
 def capture_top_setup_screenshot(symbol, timeframe="60"):
     """Batch-launch TradingView, capture one chart for the top setup, then close. Returns relative image path or None."""
     img_dir = WIKI_ROOT / "wiki/images"
@@ -247,6 +268,7 @@ def generate_daily_brief():
     report_dir = WIKI_ROOT / "wiki/reports/daily_brief"
     report_dir.mkdir(parents=True, exist_ok=True)
     report_file = report_dir / f"{today_str}.md"
+    scan_warning = ""
 
     # Find previous daily brief for diff comparison
     prev_brief = get_previous_daily_brief(report_dir, today_str)
@@ -284,7 +306,28 @@ def generate_daily_brief():
     # symbol shows up in both instead of being silently dropped for lack of scan data.
     # --timeout-ms 600000: the CLI's own default (180s) is too short for a live
     # multi-symbol scan, which can legitimately run several minutes.
-    run_command(["bash", "-c", f"cd ~/tradingview-mcp && node src/cli/index.js brief --timeout-ms 600000 -r ./forex_list.json > {tv_brief_dump}"])
+    scan_cmd = ["bash", "-c", f"cd ~/tradingview-mcp && node src/cli/index.js brief --timeout-ms 600000 -r ./forex_list.json > {tv_brief_dump}"]
+    run_command(scan_cmd)
+    # A scan can "succeed" while the chart's indicators never loaded: every symbol
+    # then comes back with zero studies read, build_daily_bias.py writes all
+    # Squeeze/neutral, and the brief publishes all-zero currency strength (seen
+    # 2026-11-05 07:49). Restart the TradingView session once and rescan; if the
+    # read still fails, flag it at the top of the brief instead of passing it off.
+    read_ok, read_total = scan_study_coverage(tv_brief_dump)
+    if read_total and read_ok < read_total / 2:
+        print(f"⚠️ tv brief read indicators on only {read_ok}/{read_total} symbols — restarting TradingView and rescanning once")
+        run_command(["bash", str(tv_session), "stop"])
+        run_command(["bash", str(tv_session), "start"])
+        time.sleep(20)  # give the Pine studies time to load before the first symbol
+        run_command(scan_cmd)
+        read_ok, read_total = scan_study_coverage(tv_brief_dump)
+        print(f"🔁 Rescan read indicators on {read_ok}/{read_total} symbols")
+    if read_total and read_ok < read_total / 2:
+        scan_warning = (
+            f"> ⚠️ **Daily scan failed: TradingView indicators were read on only {read_ok} of {read_total} symbols "
+            f"(after one restart and rescan).** Currency strength, bias, D-R-H-R setups and the watchlist captions below "
+            f"are not valid for {today_str}; rerun `python3 scripts/generate_daily_brief.py` once TradingView loads the TAW studies.\n\n"
+        )
     if not tv_brief_dump.exists() or tv_brief_dump.stat().st_size == 0:
         # run_command() discards the child's return code, so a timed-out/failed
         # brief scan would otherwise pass an empty file to build_daily_bias.py
@@ -415,7 +458,7 @@ def generate_daily_brief():
 
     report_content = f"""# 📅 Daily Trading Brief — {today_str} [{now_sgt_str}]
 
-## 📌 Executive Overview
+{scan_warning}## 📌 Executive Overview
 - **Report Date**: {today_str}
 - **Currency Strength Meter**: {cs_summary_line}
 - **Top Setup**: {top_setup_line}

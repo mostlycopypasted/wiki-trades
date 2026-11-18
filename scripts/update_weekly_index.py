@@ -281,6 +281,13 @@ def update_index_file(block_md: str) -> bool:
 
     if START_MARKER in content and END_MARKER in content:
         pattern = re.compile(f"{re.escape(START_MARKER)}.*?{re.escape(END_MARKER)}", re.DOTALL)
+        span = pattern.search(content).group(0)
+        # The block holds exactly one "## " heading. More means something
+        # re-sorted the index and split the markers apart; replacing the span
+        # would delete the catalog sections caught between them.
+        if len(re.findall(r"^## ", span, re.MULTILINE)) > 1:
+            sys.exit("❌ WEEKLY_INDEX markers enclose other ## sections; refusing to overwrite. "
+                     "Run `python3 scripts/update_index.py --rebuild` first.")
         new_content = pattern.sub(block_md, content)
     else:
         if "## Sources" in content:
