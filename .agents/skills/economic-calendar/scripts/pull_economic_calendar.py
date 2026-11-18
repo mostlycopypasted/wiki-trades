@@ -211,32 +211,24 @@ with open(note_path, "w", encoding="utf-8") as f:
 
 print(f"Economic calendar updated successfully in wiki/notes/economic-calendar.md.")
 
-# Update index.md
+# Update index.md with the repo's own update_index.py. The older global
+# llm-wiki-manager copy re-sorts sections, which moves the weekly block's
+# heading away from its START marker; update_weekly_index.py then wipes
+# everything between the markers (Sources, Entities, Concepts, Notes).
 subprocess.run([
-    "python3", "/Users/chriseah/.gemini/skills/llm-wiki-manager/scripts/update_index.py",
-    "--path", wiki_root,
+    "python3", os.path.join(wiki_root, "scripts", "update_index.py"),
     "--category", "notes",
     "--title", "Economic Calendar",
-    "--page-path", "wiki/notes/economic-calendar.md",
+    "--page-path", "notes/economic-calendar.md",
     "--summary", "Strict Red Folder economic news releases (This Week & Next Week) in SGT."
 ], cwd=wiki_root)
 
 # Log the update
 subprocess.run([
-    "python3", "/Users/chriseah/.gemini/skills/llm-wiki-manager/scripts/append_log.py",
-    "--path", wiki_root,
+    "python3", os.path.join(wiki_root, "scripts", "append_log.py"),
     "--action", "note",
     "--title", "Economic Calendar",
-    "--details", "Updated economic calendar note to strictly include Red Folder events only for This Week & Next Week."
+    "--body", "Updated economic calendar note to strictly include Red Folder events only for This Week & Next Week."
 ], cwd=wiki_root)
-
-# Fix relative links in index.md
-index_path = os.path.join(wiki_root, "wiki", "index.md")
-if os.path.exists(index_path):
-    with open(index_path, "r", encoding="utf-8") as f:
-        idx_content = f.read()
-    idx_content_fixed = re.sub(r'\]\(\.\./', '](', idx_content)
-    with open(index_path, "w", encoding="utf-8") as f:
-        f.write(idx_content_fixed)
 
 print("Index updated and log appended.")

@@ -115,6 +115,8 @@ Official primary-source statement pages, ingested when the user shares a URL or 
 
 All 8 banks' official source pages are now on file.
 
+**Automated trigger (added 2026-10-29):** the Orca automation "Central Bank Statement Ingest" runs this procedure 10 minutes after each bank's statement release (see AGENTS.md → Central Bank Statement Auto-Ingest Rule; due-check in `scripts/cb_statement_due.py`). Unattended runs cannot confirm the stance with the user, so they tag the Recent Stance Changes entry `(auto-ingested, stance not yet confirmed by the user)`. Every run must verify each quotation mark against the primary page before marking the item done.
+
 **Ingestion procedure:**
 1. Fetch the page and identify the latest published Monetary Policy Statement / decision statement.
 2. Create a normal source-summary page under `wiki/sources/` (e.g. `wiki/sources/rbnz-mps-<date>.md`) following AGENTS.md's **Source summary** page structure exactly — one-line summary, key claims with citations, evidence quality, links to existing wiki pages, notable quotes sparingly, open questions.
