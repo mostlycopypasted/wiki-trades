@@ -535,14 +535,17 @@ def _mywl_file_gallery():
         marks = list(re.finditer(r"^## 🕒 \[(\d{1,2}:\d{2}) SGT\].*$", md, re.M))
         if not marks:
             continue
-        last = marks[-1]
-        nxt = re.search(r"^#{1,2} ", md[last.end():], re.M)
-        body = md[last.end(): last.end() + nxt.start()] if nxt else md[last.end():]
-        entries = [{"sym": m.group(1).upper(), "img": os.path.basename(m.group(2))}
-                   for m in re.finditer(r"!\[(\w+)[^\]]*\]\(([^)]+)\)", body)]
-        if entries:
-            return {"date": "20%s-%s-%s" % (path.name[:2], path.name[2:4], path.name[4:6]), "time": last.group(1),
-                    "path": str(path.relative_to(WIKI)), "entries": entries}
+        # A run ends at the next run heading or an H1, not at any H2: since 2026-11-03 the sweep's own
+        # output carries a '## 📸 My Watchlist 4H Chart Screenshots' heading inside each run, which used
+        # to cut the body before its images and left the tab stuck on the 2026-11-02 sweep.
+        for last in reversed(marks):
+            nxt = re.search(r"^(?:# |## 🕒 )", md[last.end():], re.M)
+            body = md[last.end(): last.end() + nxt.start()] if nxt else md[last.end():]
+            entries = [{"sym": m.group(1).upper(), "img": os.path.basename(m.group(2))}
+                       for m in re.finditer(r"!\[(\w+)[^\]]*\]\(([^)]+)\)", body)]
+            if entries:
+                return {"date": "20%s-%s-%s" % (path.name[:2], path.name[2:4], path.name[4:6]), "time": last.group(1),
+                        "path": str(path.relative_to(WIKI)), "entries": entries}
     return None
 
 
@@ -624,6 +627,82 @@ def portfolio(date=None):
     return {"holdings": cfg.get("holdings", []), "source": cfg.get("source"), "dates": dates, "snapshot": snap}
 
 
+TRADE_WATCH_DIR = WIKI / "notes"
+_FM_LINE = re.compile(r"^([A-Za-z_]+):\s*(.*?)\s*$")
+_STATE_RE = re.compile(r"State:\s*\**\s*([^*(\n]+)")
+
+
+def _flat_frontmatter(md):
+    m = re.match(r"\A---\n(.*?)\n---\n", md, flags=re.S)
+    out = {}
+    for line in (m.group(1).splitlines() if m else []):
+        f = _FM_LINE.match(line)
+        if f:
+            out[f.group(1)] = f.group(2)
+    return out
+
+
+def _parse_sgt(text):
+    m = re.search(r"(\d{4}-\d{2}-\d{2}) (\d{2}):(\d{2})", text or "")
+    if not m:
+        return None
+    return dt.datetime.strptime("%s %s:%s" % m.groups(), "%Y-%m-%d %H:%M").replace(tzinfo=SGT)
+
+
+def trade_watches():
+    """Trade-watch notes (wiki/notes/*.md with `type: trade-watch` frontmatter), newest first, active ones on top.
+
+    Written by Claude when the user asks for a setup to be watched, and checked by every scheduled 4H TAT run,
+    which appends a '### 🕒 [YYYY-MM-DD HH:MM SGT]' entry to the note's '## Check Log' (see AGENTS.md,
+    Trade Watch Check Rule). The state shown is whatever the latest entry's 'State:' says."""
+    now = now_sgt()
+    out = []
+    for path in TRADE_WATCH_DIR.glob("*.md"):
+        md = read(path)
+        fm = _flat_frontmatter(md)
+        if fm.get("type") != "trade-watch":
+            continue
+        body = strip_frontmatter(md)
+        title = next((clean_inline(l[2:]) for l in body.splitlines() if l.startswith("# ")), path.stem)
+        summary = next((clean_inline(l[2:]) for l in body.splitlines() if l.startswith("> ")), "")
+        setups = []
+        for head, sec in split_sections(body, 2):
+            if not head.lower().startswith("setup"):
+                continue
+            fields = {}
+            for f in re.finditer(r"^- \*\*([^:*]+):\*\*\s*(.+)$", sec, flags=re.M):
+                fields[f.group(1).strip().lower()] = clean_inline(f.group(2))
+            setups.append({
+                "name": clean_inline(re.sub(r"[🟢🔴⚪]", "", head)).strip(),
+                "dir": "bull" if "🟢" in head else "bear" if "🔴" in head else "neutral",
+                "zone": fields.get("zone", ""), "trigger": fields.get("trigger", ""), "stop": fields.get("stop", ""),
+                "targets": fields.get("targets", ""), "invalid": fields.get("invalidated by", ""),
+            })
+        checks = []
+        for head, sec in split_sections(find_section(body, "Check Log"), 3):
+            when = re.search(r"\[([^\]]+)\]", head)
+            state = _STATE_RE.search(sec.replace("**", ""))
+            checks.append({
+                "when": when.group(1) if when else head,
+                "state": state.group(1).strip().rstrip(".") if state else "",
+                "notes": [clean_inline(l[2:]) for l in sec.splitlines() if l.startswith("- ")],
+            })
+        expires = _parse_sgt(fm.get("expires"))
+        status = fm.get("status", "active")
+        if status == "active" and expires and now > expires:
+            status = "expired"
+        last = checks[-1] if checks else None
+        out.append({
+            "sym": fm.get("symbol", "").upper(), "status": status, "title": title, "summary": summary,
+            "created": fm.get("created", ""), "expires": fm.get("expires", ""),
+            "path": str(path.relative_to(WIKI)), "setups": setups,
+            "state": (last or {}).get("state", ""), "last": last, "checks": len(checks),
+        })
+    active = [w for w in out if w["status"] == "active"]
+    rest = sorted((w for w in out if w["status"] != "active"), key=lambda w: w["created"], reverse=True)
+    return {"watches": sorted(active, key=lambda w: w["created"], reverse=True) + rest[:5]}
+
+
 def my_watchlist_gallery():
     """Newest My-Watchlist 4H sweep: the dedicated my_watchlist/ files, or a TAT report section, whichever is later."""
     tat = _tat_watchlist_gallery()
@@ -680,7 +759,99 @@ def parse_daily_signals_report(date):
         if "Executive Summary" in h:
             summary = b.strip().rstrip("-").strip()
             break
-    return {"date": date, "path": str(path.relative_to(WIKI)), "summary": summary}
+    return {"date": date, "path": str(path.relative_to(WIKI)), "summary": summary,
+            "runs": _dsig_runs(md), "rows": _dsig_rows(md)}
+
+
+def _dsig_source(heading):
+    h = (heading or "").lower()
+    if "forex" in h:
+        return "Forex"
+    if "tradingview" in h or "bats" in h:
+        return "TV Stocks"
+    if "yahoo" in h:
+        return "Yahoo"
+    return None
+
+
+def _dsig_runs(md):
+    """Run labels in file order: the morning run from the title, then each `Intraday Update Run`."""
+    runs = []
+    m = re.search(r"^# .*?\[(\d{1,2}:\d{2})", md, re.M)
+    runs.append(m.group(1) if m else "")
+    for h, _ in split_sections(md, 2):
+        if "intraday" in h.lower():
+            m = re.search(r"(\d{1,2}:\d{2})", h)
+            runs.append(m.group(1) if m else "update")
+    return runs
+
+
+def _dsig_images(md):
+    """{symbol: image basename} from the `#### SYM — Daily` chart gallery entries."""
+    out = {}
+    for m in re.finditer(r"^#{3,4}\s+([A-Za-z0-9.:^!_-]+)\s+[—–-]+\s+Daily[^\n]*\n+!\[[^\]]*\]\(([^)]+)\)", md, re.M):
+        out[canon_symbol(m.group(1))] = m.group(2).rsplit("/", 1)[-1]
+    return out
+
+
+def _dsig_row(r, src, run, market):
+    def col(*names):
+        for n in names:
+            for k, v in r.items():
+                if k.lower() == n.lower() and v.strip():
+                    return v.strip()
+        return ""
+    inst = col("Instrument", "Symbol")
+    syms = wikilinks(inst)
+    sym = syms[0] if syms else canon_symbol(clean_inline(inst).split(" ")[0]) if clean_inline(inst) else ""
+    if not sym:
+        return None
+    raw_sig = col("Signal", "Signal Type")
+    signal = re.sub(r"\s*\(\+[^)]*\)", "", clean_inline(raw_sig)).strip()
+    dirtxt = (inst + " " + col("Direction")).lower()
+    d = "bull" if ("🟢" in dirtxt or "bull" in dirtxt) else "bear" if ("🔴" in dirtxt or "bear" in dirtxt) else signal_direction(signal)
+    mk = col("Market") or market
+    return {"sym": sym, "src": src, "run": run, "market": mk, "dir": d, "signal": signal,
+            "tflow": signal.lower().startswith("tflow"), "zone": "@zone" in raw_sig.lower() or "@zone" in col("Event / Level Detail").lower(),
+            "price": clean_inline(col("Signal Price")),
+            "date": clean_inline(col("Signal Date (SGT)", "Signal Date", "Date & Time (SGT)", "Date (SGT)", "Time (SGT)")),
+            "name": clean_inline(col("Name")),
+            "sector": clean_inline(col("Sector / Sub-Sector")),
+            "detail": clean_inline(col("Event / Level Detail")),
+            "note": clean_inline(" · ".join(x for x in (col("Note"), col("Status")) if x))}
+
+
+def _dsig_rows(md):
+    """Every signal row from the report's source tables (Forex / TV Stocks / Yahoo, plus intraday updates)."""
+    images = _dsig_images(md)
+    rows, runs = [], _dsig_runs(md)
+    ui = 0
+    for h, body in split_sections(md, 2):
+        intraday = "intraday" in h.lower()
+        src = _dsig_source(h)
+        if intraday:
+            ui += 1
+        elif not src:
+            continue
+        run = runs[ui] if ui < len(runs) else ""
+        chunks = re.split(r"^(?=#{3,4} )", body, flags=re.M)
+        for ch in chunks:
+            first = ch.splitlines()[0] if ch.strip() else ""
+            heading = first.lstrip("#").strip() if first.startswith("#") else ""
+            csrc = _dsig_source(heading) or src or "Other"
+            market = "Asian" if re.search(r"asian|sgx|hkex", heading, re.I) else ""
+            dm = re.search(r"signal date\s+(\d{4}-\d{2}-\d{2})", heading, re.I)
+            for header, trs in parse_tables(ch):
+                if not header or not re.match(r"(instrument|symbol)", header[0], re.I):
+                    continue
+                for r in trs:
+                    row = _dsig_row(r, csrc, run, market)
+                    if row:
+                        row["img"] = images.get(row["sym"])
+                        if not row["date"] and dm:
+                            row["date"] = dm.group(1)
+                        rows.append(row)
+    return rows
 
 
 # ---------------------------------------------------------------- AHH session notes

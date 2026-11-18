@@ -119,6 +119,7 @@ main { padding: 18px 20px 60px; max-width: 1680px; margin: 0 auto; }
 .view-head { display: flex; align-items: baseline; gap: 12px; margin: 2px 0 14px; flex-wrap: wrap; }
 .view-head h1 { font-size: 20px; margin: 0; }
 .view-head .sub { color: var(--muted); }
+.view-head .seg { margin-left: auto; }
 .grid { display: grid; gap: 14px; }
 .g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -714,3 +715,20 @@ select, input[type=date], input.txt { border-radius: 0; background: #000; paddin
 .jsc b { font-weight: 600; }
 td.ellip { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 820px) { td.ellip { max-width: 180px; } }
+
+/* Trade watch (My Watchlist tab): notes with `type: trade-watch`, checked by each 4H TAT run */
+.tw-list { display: flex; flex-direction: column; gap: 12px; }
+.tw { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--surface-2); min-width: 0; }
+.tw.tw-closed { opacity: .65; }
+.tw-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tw-last { margin: 8px 0; }
+.tw-last ul { margin: 4px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.45; }
+.tw-last li { margin: 2px 0; overflow-wrap: anywhere; }
+.tw-setups { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+.tw-setup { border-radius: 8px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--border); min-width: 0; }
+.tw-setup.bull { box-shadow: inset 3px 0 0 var(--bull); } .tw-setup.bear { box-shadow: inset 3px 0 0 var(--bear); }
+.tw-sn { font-weight: 600; font-size: 13px; margin-bottom: 6px; }
+.tw-setup.bull .tw-sn { color: var(--bull-ink); } .tw-setup.bear .tw-sn { color: var(--bear-ink); }
+.tw-setup dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin: 0; font-size: 12.5px; line-height: 1.4; }
+.tw-setup dt { color: var(--muted); } .tw-setup dd { margin: 0; overflow-wrap: anywhere; }
+.dir.tw-hot { box-shadow: 0 0 0 1.5px var(--medium); }

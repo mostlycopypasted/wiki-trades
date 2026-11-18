@@ -478,9 +478,12 @@ function cbCard(cb) {
 }
 
 // ============================================================ views: SIGNALS
+const SIG_PAGE = 2000;  // rows the live-sheet table shows before "Show more" (30D with 1H+4H+Daily is ~1,800)
 async function viewSignals(root) {
-  const f = F('signals', { range: '7d', srcs: ['1H', '4H', 'D'], dir: 'all', kinds: ['Opt', 'L', 'S'], cls: 'all', ccy: 'all', shown: 200 });
+  const f = F('signals', { range: '7d', srcs: ['1H', '4H', 'D'], dir: 'all', kinds: ['Opt', 'L', 'S'], cls: 'all', ccy: 'all', shown: SIG_PAGE, mode: 'live' });
   f.srcs = asSet(f.srcs); f.kinds = asSet(f.kinds);
+  f.shown = Math.max(f.shown || 0, SIG_PAGE);  // a saved 200 from before the limit was raised
+  if (f.mode === 'daily') return viewDailySignals(root, f);
   const today = sgtToday(), q = S.q, rows = sigRows();
   const start = { today: today, '3d': addDays(today, -2), '7d': addDays(today, -6), '30d': addDays(today, -29), all: '0000' }[f.range];
   const inRange = r => f.range === 'custom' ? r.date === f.day : r.date >= start;
@@ -489,14 +492,14 @@ async function viewSignals(root) {
     && (f.cls === 'all' || r.cls === f.cls) && (f.ccy === 'all' || symCurrencies(r.sym).includes(f.ccy))
     && matches(q, r.sym, r.name, r.signal, r.event, r.sector, r.srcLabel));
 
-  const upd = fn => () => { fn(); f.shown = 200; saveFilters(); render(); };
+  const upd = fn => () => { fn(); f.shown = SIG_PAGE; saveFilters(); render(); };
   const classes = ['all', ...new Set(rows.map(r => r.cls))].sort();
   // Signal Judge ledger for this range (api() caches it ~45 s per URL, so filter changes re-render from cache)
   const jSince = f.range === 'custom' ? f.day : f.range === 'all' ? addDays(today, -89) : start;
   const jUntil = f.range === 'custom' ? f.day : today;
   const J = rows.length ? await api(`/api/judge?since=${jSince}&until=${jUntil}`) : null;
   root.replaceChildren(
-    h('div', { class: 'view-head' }, h('h1', null, 'TAT Signals'), h('span', { class: 'sub' }, 'Live from the TAT alert Google Sheet')),
+    h('div', { class: 'view-head' }, h('h1', null, 'TAT Signals'), h('span', { class: 'sub' }, 'Live from the TAT alert Google Sheet'), sigModeSeg(f)),
     h('div', { class: 'filters' },
       h('span', { class: 'flabel' }, 'Range'),
       seg([{ v: 'today', label: 'Today' }, { v: '3d', label: '3D' }, { v: '7d', label: '7D' }, { v: '30d', label: '30D' }, { v: 'all', label: 'All' }]
@@ -525,25 +528,12 @@ async function viewSignals(root) {
     ['Latest', filtered[0] ? h('span', null, filtered[0].sym, ' ', sigSpan(filtered[0].signal)) : '—', filtered[0] ? `${filtered[0].date} ${filtered[0].time} · ${TF_SRC[filtered[0].src]}` : ''],
   ].map(([l, v, ft]) => h('div', { class: 'kpi' }, h('div', { class: 'lbl' }, l), h('div', { class: 'val sm' }, v), h('div', { class: 'foot' }, ft)))));
 
-  // most active
-  const bySym = {};
-  for (const r of filtered) { const o = bySym[r.sym] || (bySym[r.sym] = { bull: 0, bear: 0 }); o[r.dir] = (o[r.dir] || 0) + 1; }
-  const top = Object.entries(bySym).map(([s, o]) => ({ s, ...o, n: (o.bull || 0) + (o.bear || 0) })).sort((a, b) => b.n - a.n).slice(0, 14);
-  const maxN = Math.max(1, ...top.map(t => t.n));
-  const actCard = card('Most active', `${Object.keys(bySym).length} instruments`,
-    top.length ? top.map(t => h('div', { class: 'hbar', title: `${t.s}: ▲${t.bull || 0} ▼${t.bear || 0}` },
-      symChip(t.s, (t.bull || 0) >= (t.bear || 0) ? 'bull' : 'bear'),
-      h('div', { class: 'bars' },
-        t.bull ? h('i', { style: { width: `${100 * t.bull / maxN}%`, background: 'var(--bull)' } }) : null,
-        t.bear ? h('i', { style: { width: `${100 * t.bear / maxN}%`, background: 'var(--bear)' } }) : null),
-      h('span', { class: 'num small' }, `${t.n}`))) : empty('Nothing matches'),
-    h('div', { class: 'legend' }, h('span', { class: 'k' }, h('i', { class: 'sw', style: { background: 'var(--bull)' } }), '▲ Bull'), h('span', { class: 'k' }, h('i', { class: 'sw', style: { background: 'var(--bear)' } }), '▼ Bear')));
-  root.appendChild(h('div', { class: 'mt' }, actCard));
 
   // Signal Judge card (docs/design/signal-judge.md §9)
   const jmap = {};
   if (J && J.entries) for (const e of J.entries) for (const m of e.match || []) jmap[m] = e;
-  root.appendChild(h('div', { class: 'mt' }, judgeCard(J, f, q)));
+  const judgeEl = h('div', { class: 'mt' }, judgeCard(J, f, q));
+  root.appendChild(judgeEl);
 
   // multi-timeframe alignment matrix (current state from the whole sheet, scoped to the filtered symbols)
   const fxSyms = new Set(filtered.filter(r => ['1H', '4H', 'D'].includes(r.src)).map(r => r.sym));
@@ -553,7 +543,12 @@ async function viewSignals(root) {
       .sort((a, b) => (b.al.n - a.al.n) || ((b.st['1H'] || b.st['4H'] || {}).date || '').localeCompare((a.st['1H'] || a.st['4H'] || {}).date || ''));
     const stale = addDays(today, -10);
     const cell = r => r ? h('span', { class: 'cell', style: r.date < stale ? { opacity: 0.45 } : null, title: `${r.signal} @ ${r.price} · ${r.event}${r.date < stale ? ' · older than 10 days' : ''}` }, h('span', { class: `dir ${r.dir}` }, r.dir === 'bull' ? '▲' : '▼', ' ', r.signal), h('span', { class: 's' }, `${shortDate(r.date)} ${r.time.slice(0, 5)}`)) : h('span', { class: 'muted' }, '—');
-    const mx = card('Multi-timeframe alignment', 'latest signal per timeframe · ★ = timeframes agreeing with the newest · faded = older than 10 days',
+    const mxOff = !!f.mxcollapsed;
+    const mxToggle = h('button', { class: 'btn', 'aria-expanded': mxOff ? 'false' : 'true', title: mxOff ? 'Show the alignment matrix' : 'Hide the alignment matrix',
+      onclick: () => { f.mxcollapsed = !mxOff; saveFilters(); render(); } }, mxOff ? '▸ Expand' : '▾ Collapse');
+    const mxRight = h('span', { style: { display: 'inline-flex', gap: '8px', alignItems: 'center' } },
+      h('span', { class: 'small muted' }, mxOff ? `${mrows.length} instrument${mrows.length === 1 ? '' : 's'}` : 'latest signal per timeframe · ★ = timeframes agreeing with the newest · faded = older than 10 days'), mxToggle);
+    const mx = card('Multi-timeframe alignment', mxRight, mxOff ? null :
       h('div', { class: 'tbl-wrap', style: { maxHeight: '420px', overflowY: 'auto' } }, h('table', { class: 'tbl mx' },
         h('thead', null, h('tr', null, ['Instrument', 'Class', 'Daily', '4H', '1H', 'Alignment'].map(c => h('th', { class: ['Daily', '4H', '1H'].includes(c) ? 'c tf' : null }, c)))),
         h('tbody', null, mrows.slice(0, 60).map(m => h('tr', null,
@@ -569,9 +564,16 @@ async function viewSignals(root) {
   const sorted = filtered.slice().sort((a, b) => { const x = keyf[sort.k](a), y = keyf[sort.k](b); return (x < y ? -1 : x > y ? 1 : 0) * sort.d; });
   const th = (label, k) => h('th', { class: k ? 'sortable' : '', onclick: k ? () => { f.sort = { k, d: sort.k === k ? -sort.d : -1 }; saveFilters(); render(); } : null },
     label, sort.k === k ? (sort.d > 0 ? ' ↑' : ' ↓') : '');
-  const tbl = card('All signals', `${filtered.length.toLocaleString()} rows`, h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' },
+  const cut = sorted.length > f.shown, pageRows = sorted.slice(0, f.shown);
+  const oldest = pageRows.reduce((m, r) => !m || r.date < m ? r.date : m, '');
+  const tblOff = !!f.tblcollapsed;
+  const tblLabel = cut ? `Showing ${f.shown.toLocaleString()} of ${sorted.length.toLocaleString()} rows${sort.k === 'date' && sort.d < 0 ? ' · back to ' + shortDate(oldest) : ''}` : `${filtered.length.toLocaleString()} rows`;
+  const tblToggle = h('button', { class: 'btn', 'aria-expanded': tblOff ? 'false' : 'true', title: tblOff ? 'Show the signals table' : 'Hide the signals table',
+    onclick: () => { f.tblcollapsed = !tblOff; saveFilters(); render(); } }, tblOff ? '▸ Expand' : '▾ Collapse');
+  const tblRight = h('span', { style: { display: 'inline-flex', gap: '8px', alignItems: 'center' } }, h('span', { class: 'small muted' }, tblLabel), tblToggle);
+  const tblBody = h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' },
     h('thead', null, h('tr', null, th('Date / time (SGT)', 'date'), th('Instrument', 'sym'), th('Source', 'src'), th('Signal', 'signal'), th('Dir', 'dir'), th('Price', 'price'), th('Judge'), th('Event / sector'))),
-    h('tbody', null, sorted.slice(0, f.shown).map(r => h('tr', null,
+    h('tbody', null, pageRows.map(r => h('tr', null,
       h('td', { class: 'nowrap num' }, `${r.date} ${r.time.slice(0, 5)}`),
       h('td', { class: 'nowrap' }, symChip(r.sym, r.dir), r.exch && !['EIGHTCAP', 'BATS'].includes(r.exch) ? h('span', { class: 'small muted' }, ' ' + r.exch) : null,
         r.name ? h('div', { class: 'small muted' }, r.name) : null),
@@ -579,9 +581,97 @@ async function viewSignals(root) {
       h('td', null, sigSpan(r.signal)), h('td', null, dirBadge(r.dir)),
       h('td', { class: 'num' }, r.price),
       h('td', { class: 'nowrap' }, judgeCell(jmap[`${r.sym}|${r.src}|${r.dir}|${r.date}|${(r.time || '').slice(0, 5)}`])),
-      h('td', { class: 'wrap small' }, r.event || r.sector)))))),
-    sorted.length > f.shown ? h('div', { class: 'more' }, h('button', { class: 'btn', onclick: () => { f.shown += 400; render(); } }, `Show more (${(sorted.length - f.shown).toLocaleString()} left)`)) : null);
+      h('td', { class: 'wrap small' }, r.event || r.sector))))));
+  const tblMore = sorted.length > f.shown ? h('div', { class: 'more' }, h('button', { class: 'btn', onclick: () => { f.shown += 2000; saveFilters(); render(); } }, `Show more (${(sorted.length - f.shown).toLocaleString()} left)`)) : null;
+  const tbl = card('All signals', tblRight, tblOff ? null : tblBody, tblOff ? null : tblMore);
+  root.insertBefore(h('div', { class: 'mt' }, tbl), judgeEl);  // All signals sits above the Signal Judge card
+}
+
+// ---- Daily Signals view (the once-a-day snapshot in wiki/reports/daily-signals/, via GET /api/dsig)
+const sigModeSeg = f => seg([{ v: 'live', label: 'Live sheet' }, { v: 'daily', label: 'Daily Signals' }], f.mode || 'live',
+  v => { f.mode = v; saveFilters(); render(); });
+const DSIG_SRC = { 'Forex': 'Forex', 'TV Stocks': 'TV Stocks', 'Yahoo': 'Yahoo' };
+
+async function viewDailySignals(root, sf) {
+  const dates = ((S.meta || {}).dsig || []).slice().sort().reverse();
+  const f = F('dsig', { date: null, srcs: ['Forex', 'TV Stocks', 'Yahoo'], dir: 'all', kinds: ['Opt', 'L', 'S'], tflow: false, mkt: 'all', shown: 300 });
+  f.srcs = asSet(f.srcs); f.kinds = asSet(f.kinds);
+  if (!f.date || !dates.includes(f.date)) f.date = dates[0];
+  const head = h('div', { class: 'view-head' }, h('h1', null, 'TAT Signals'),
+    h('span', { class: 'sub' }, 'Daily Signals: the once-a-day snapshot'), sigModeSeg(sf));
+  if (!f.date) { root.replaceChildren(head, card('Daily Signals', null, empty('No Daily Signals report has been filed yet.'))); return; }
+  const ds = await api('/api/dsig?date=' + f.date);
+  const idx = dates.indexOf(f.date);
+  const setDate = d => { f.date = d; f.shown = 300; saveFilters(); render(); };
+  const upd = fn => () => { fn(); f.shown = 300; saveFilters(); render(); };
+  const kind = sig => /^(tflow )?opt/i.test(sig) ? 'Opt' : /^(tflow )?l/i.test(sig) ? 'L' : /^(tflow )?s/i.test(sig) ? 'S' : 'Opt';
+  const all = (ds && ds.rows) || [];
+  const rows = all.filter(r => f.srcs.has(r.src) && (f.dir === 'all' || r.dir === f.dir) && f.kinds.has(kind(r.signal))
+    && (!f.tflow || r.tflow) && (f.mkt === 'all' || (f.mkt === 'asia' ? r.market === 'Asian' : r.market !== 'Asian'))
+    && matches(S.q, r.sym, r.name, r.signal, r.detail, r.sector, r.note, r.src));
+
+  root.replaceChildren(head, h('div', { class: 'filters' },
+    h('div', { class: 'datebar' },
+      h('button', { class: 'iconbtn', disabled: idx >= dates.length - 1 ? true : null, onclick: () => setDate(dates[idx + 1]), title: 'Older' }, '‹'),
+      h('select', { onchange: e => setDate(e.target.value), 'aria-label': 'Report date' }, dates.map(d => h('option', { value: d, selected: d === f.date ? true : null }, niceDate(d) + ' ' + d.slice(0, 4)))),
+      h('button', { class: 'iconbtn', disabled: idx <= 0 ? true : null, onclick: () => setDate(dates[idx - 1]), title: 'Newer' }, '›')),
+    h('span', { class: 'flabel' }, 'Source'),
+    seg(Object.entries(DSIG_SRC).map(([v, label]) => ({ v, label })), f.srcs, v => upd(() => { f.srcs = v; })(), { multi: true }),
+    h('span', { class: 'flabel' }, 'Dir'),
+    seg([{ v: 'all', label: 'All' }, { v: 'bull', label: '▲ Bull', cls: 'bull' }, { v: 'bear', label: '▼ Bear', cls: 'bear' }], f.dir, v => upd(() => { f.dir = v; })()),
+    h('span', { class: 'flabel' }, 'Signal'),
+    seg([{ v: 'Opt', label: 'Opt' }, { v: 'L', label: 'Large' }, { v: 'S', label: 'Small' }], f.kinds, v => upd(() => { f.kinds = v; })(), { multi: true }),
+    h('span', { class: 'flabel' }, 'Market'),
+    seg([{ v: 'all', label: 'All' }, { v: 'main', label: 'US / FX' }, { v: 'asia', label: 'Asian (D−1)' }], f.mkt, v => upd(() => { f.mkt = v; })()),
+    h('label', { class: 'toggle' }, h('input', { type: 'checkbox', checked: f.tflow ? true : null, onchange: e => upd(() => { f.tflow = e.target.checked; })() }), 'Tflow only'),
+    ds ? h('button', { class: 'btn', onclick: () => openDoc(ds.path, 'Daily Signals ' + ds.date) }, 'Full report ↗') : null));
+  if (!ds) { root.appendChild(card('Daily Signals', null, empty('Could not read this report.'))); return; }
+
+  const nb = rows.filter(r => r.dir === 'bull').length, ns = rows.filter(r => r.dir === 'bear').length;
+  const uniq = new Set(rows.map(r => r.sym)).size, nt = rows.filter(r => r.tflow).length;
+  const bySrc = {}; for (const r of rows) bySrc[r.src] = (bySrc[r.src] || 0) + 1;
+  const runs = (ds.runs || []).filter(Boolean);
+  root.appendChild(h('div', { class: 'kpis' }, [
+    ['Calls', rows.length.toLocaleString(), `${uniq} instruments${rows.length !== all.length ? ` · of ${all.length}` : ''}`],
+    ['Bullish', h('span', { style: { color: 'var(--bull-ink)' } }, `▲ ${nb}`), rows.length ? `${Math.round(100 * nb / rows.length)}%` : ''],
+    ['Bearish', h('span', { style: { color: 'var(--bear-ink)' } }, `▼ ${ns}`), rows.length ? `${Math.round(100 * ns / rows.length)}%` : ''],
+    ['Tflow', String(nt), nt ? `${rows.filter(r => r.zone).length} in a D-Zone` : 'none'],
+    ['Sources', Object.entries(bySrc).map(([k, v]) => `${k} ${v}`).join(' · ') || '—', runs.length ? `run${runs.length > 1 ? 's' : ''} ${runs.join(', ')} SGT` : ''],
+  ].map(([l, v, ft]) => h('div', { class: 'kpi' }, h('div', { class: 'lbl' }, l), h('div', { class: 'val sm' }, v), h('div', { class: 'foot' }, ft)))));
+
+  if (ds.summary) {
+    const md = renderMd(ds.summary, ds.path);
+    if (S.q) highlight(md, S.q);
+    root.appendChild(h('div', { class: 'mt' }, card('Executive summary', null,
+      h('details', { open: f.showSum ? true : null, ontoggle: e => { f.showSum = e.target.open; saveFilters(); } },
+        h('summary', { style: { cursor: 'pointer', fontWeight: 600, color: 'var(--text-2)' } }, 'Themes, clusters and cross-feed corroboration'), md))));
+  }
+
+  const dtd = (r) => r.date || '—';
+  const tbl = card('Calls', `${rows.length.toLocaleString()} rows`, rows.length ? h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' },
+    h('thead', null, h('tr', null, ['Instrument', 'Source', 'Signal', 'Dir', 'Price', 'Signal date (SGT)', 'Detail / sector', 'Note'].map(c => h('th', null, c)))),
+    h('tbody', null, rows.slice(0, f.shown).map(r => h('tr', null,
+      h('td', { class: 'nowrap' }, symChip(r.sym, r.dir), r.name ? h('div', { class: 'small muted' }, r.name) : null),
+      h('td', null, h('span', { class: 'tag src' }, r.src), r.market === 'Asian' ? h('span', { class: 'tag' }, 'Asian') : null, r.run && (ds.runs || []).length > 1 ? h('div', { class: 'small muted' }, r.run) : null),
+      h('td', null, sigSpan(r.signal), r.zone ? h('span', { class: 'tag' }, '@Zone') : null), h('td', null, dirBadge(r.dir)),
+      h('td', { class: 'num' }, r.price || '—'),
+      h('td', { class: 'nowrap num small' }, dtd(r)),
+      h('td', { class: 'wrap small' }, r.detail || r.sector || ''),
+      h('td', { class: 'wrap small muted' }, r.note || '')))))) : empty(all.length ? 'Nothing matches the filters' : 'This report has no signal rows (an empty or weekend run).'),
+    rows.length > f.shown ? h('div', { class: 'more' }, h('button', { class: 'btn', onclick: () => { f.shown += 300; render(); } }, `Show more (${(rows.length - f.shown).toLocaleString()} left)`)) : null);
   root.appendChild(h('div', { class: 'mt' }, tbl));
+
+  // one Daily chart per instrument (a name on two feeds or two signals shares a chart)
+  const seen = new Set(), charts = [];
+  for (const r of rows) if (r.img && !seen.has(r.sym)) { seen.add(r.sym); charts.push(r); }
+  if (charts.length) {
+    root.appendChild(h('div', { class: 'mt' }, card('Daily charts', `${charts.length} instruments`,
+      h('div', { class: 'wgrid' }, charts.map(r => h('div', { class: 'wcard' },
+        h('img', { src: '/images/' + r.img, loading: 'lazy', alt: `${r.sym} daily chart`, dataset: { full: '/images/' + r.img, cap: `${r.sym} · Daily · ${ds.date}` } }),
+        h('div', { class: 'wb' }, symChip(r.sym, r.dir), dirBadge(r.dir), sigSpan(r.signal), h('span', { class: 'num muted', style: { marginLeft: 'auto' } }, r.price))))))));
+  } else if (rows.length) {
+    root.appendChild(h('div', { class: 'mt small muted' }, 'This report has no embedded Daily charts (older reports were filed without a chart gallery).'));
+  }
 }
 
 // ---- Signal Judge helpers
@@ -596,6 +686,18 @@ function judgeCell(e) {
   if (e.verdict && e.verdict !== 'pending') return verdictBadge(e);
   return h('span', { class: 'small muted', title: e.reason || '' }, e.prefilter || '');
 }
+// Empty Signal Judge table: the card ignores the Source chips (judged signals are all 1H/4H), so only
+// the date range and the search box can leave it empty.
+function judgeEmpty(judged, f, q) {
+  if (!judged.length) {
+    const wide = f.range === 'custom' || f.range === 'today';
+    return h('div', { class: 'empty' }, `No judged signals ${f.range === 'custom' ? 'on ' + f.day : 'in this range'}. `,
+      wide ? h('button', { class: 'btn', onclick: () => { f.range = '7d'; f.jshown = 50; saveFilters(); render(); } }, 'Show last 7 days') : null);
+  }
+  return h('div', { class: 'empty' }, `${judged.length} judged signal${judged.length === 1 ? '' : 's'} hidden by the search “${q}”. `,
+    h('button', { class: 'btn', onclick: () => { setQuery(''); f.jshown = 50; saveFilters(); render(); } }, 'Clear search'));
+}
+
 function judgeCard(J, f, q) {
   if (!J) return card('Signal Judge', null, empty('Signal Judge unavailable (could not load /api/judge)'));
   if (J.status && J.status.error) return card('Signal Judge', null, empty(`Signal Judge unavailable (${J.status.error})`));
@@ -607,7 +709,8 @@ function judgeCard(J, f, q) {
   const dates = Object.keys(J.reports || {}).sort();
   const last = dates[dates.length - 1];
   const open = last ? h('button', { class: 'btn', onclick: () => openDoc(J.reports[last], 'Signal Judge ' + last) }, 'Open report ↗') : null;
-  const ents = J.entries.filter(e => e.verdict && e.verdict !== 'pending' && f.srcs.has(e.tf) && matches(q, e.symbol, e.signal, e.reason));
+  const judged = J.entries.filter(e => e.verdict && e.verdict !== 'pending');
+  const ents = judged.filter(e => matches(q, e.symbol, e.signal, e.reason));
   f.jshown = f.jshown || 50;
   const body = ents.length ? h('div', { class: 'tbl-wrap' }, h('table', { class: 'tbl' },
     h('thead', null, h('tr', null, ['Time', 'Instrument', 'TF', 'Signal', 'Verdict', 'Basis', 'Entry / SL / TP1', 'R:R', 'Outcome', 'Reason'].map(c => h('th', null, c)))),
@@ -621,10 +724,15 @@ function judgeCard(J, f, q) {
       h('td', { class: 'num nowrap' }, [e.entry, e.sl, e.tp1].map(x => x == null ? '—' : +(+x).toPrecision(6)).join(' / ')),
       h('td', { class: 'num' }, e.rr ? `1:${e.rr}` : 'open'),
       h('td', { class: 'nowrap small' }, e.tracked ? `${e.outcome || ''}${e.r != null ? ' ' + e.r + 'R' : ''}` : 'untracked'),
-      h('td', { class: 'small ellip', title: e.reason || '' }, e.reason || '')))))) : empty('No judged signals in this range');
+      h('td', { class: 'small ellip', title: e.reason || '' }, e.reason || '')))))) : judgeEmpty(judged, f, q);
   const more = ents.length > f.jshown ? h('div', { class: 'more' }, h('button', { class: 'btn', onclick: () => { f.jshown += 100; render(); } }, `Show more (${ents.length - f.jshown} left)`)) : null;
   const note = J.status.truncated ? h('div', { class: 'small muted' }, `Judge data shows the newest 5,000 of ${J.status.truncated} alerts`) : null;
-  return card('Signal Judge', open, scl, note, body, more);
+  const collapsed = !!f.jcollapsed;
+  const toggle = h('button', { class: 'btn', 'aria-expanded': collapsed ? 'false' : 'true', title: collapsed ? 'Show the Signal Judge table' : 'Hide the Signal Judge table',
+    onclick: () => { f.jcollapsed = !collapsed; saveFilters(); render(); } }, collapsed ? '▸ Expand' : '▾ Collapse');
+  const right = h('span', { style: { display: 'inline-flex', gap: '8px', alignItems: 'center' } },
+    collapsed ? h('span', { class: 'small muted' }, `${ents.length} verdict${ents.length === 1 ? '' : 's'}`) : null, open, toggle);
+  return collapsed ? card('Signal Judge', right) : card('Signal Judge', right, scl, note, body, more);
 }
 
 // ============================================================ views: ANALYSIS
@@ -952,10 +1060,37 @@ async function viewBrief(root) {
 }
 
 // ============================================================ views: MY WATCHLIST
+// Trade-watch notes (wiki/notes, `type: trade-watch`): checked by every scheduled 4H TAT run, which appends to the note's Check Log.
+function watchStateDir(state) {
+  const s = (state || '').toUpperCase();
+  return /\bL\b/.test(s) ? 'bull' : /\bS\d?\b/.test(s) ? 'bear' : 'neutral';
+}
+function watchStateBadge(w) {
+  const label = w.status !== 'active' ? (w.state ? `${w.state} · ${w.status}` : w.status) : (w.state || 'not checked yet');
+  const hot = /TRIGGER|INVALID|TARGET/i.test(w.state || '');
+  return h('span', { class: `dir ${watchStateDir(w.state)}${hot ? ' tw-hot' : ''}`, title: 'State from the latest Check Log entry' }, (hot ? '⚡ ' : '👁 ') + label);
+}
+function tradeWatchCard(watches) {
+  const active = watches.filter(w => w.status === 'active').length;
+  return card('Trade watch', `${active} active · checked every 4H run`, h('div', { class: 'tw-list' }, watches.map(w => h('div', { class: 'tw' + (w.status === 'active' ? '' : ' tw-closed') },
+    h('div', { class: 'tw-h' }, symChip(w.sym), watchStateBadge(w),
+      h('span', { class: 'muted small' }, `created ${w.created} · expires ${w.expires}`),
+      h('button', { class: 'btn', style: { marginLeft: 'auto' }, onclick: () => openDoc(w.path, w.title) }, 'Open note')),
+    w.last ? h('div', { class: 'tw-last' }, h('div', { class: 'muted small' }, `Last check ${w.last.when} · ${w.checks} check${w.checks === 1 ? '' : 's'}`),
+      h('ul', null, w.last.notes.map(n => h('li', null, n)))) : h('div', { class: 'muted small' }, 'No check yet — the next scheduled 4H run will add one.'),
+    w.setups.length ? h('div', { class: 'tw-setups' }, w.setups.map(s => h('div', { class: 'tw-setup ' + s.dir },
+      h('div', { class: 'tw-sn' }, s.name),
+      h('dl', null, [['Zone', s.zone], ['Trigger', s.trigger], ['Stop', s.stop], ['Targets', s.targets], ['Invalid if', s.invalid]]
+        .filter(([, v]) => v).flatMap(([k, v]) => [h('dt', null, k), h('dd', null, v)]))))) : null))));
+}
+
 async function viewMyWatchlist(root) {
-  const [g, cfg] = await Promise.all([api('/api/my-watchlist'), api('/api/my-watchlist/config', { fresh: true })]);
+  const [g, cfg, tw] = await Promise.all([api('/api/my-watchlist'), api('/api/my-watchlist/config', { fresh: true }), api('/api/trade-watch', { fresh: true })]);
   root.replaceChildren(h('div', { class: 'view-head' }, h('h1', null, 'My Watchlist'),
     h('span', { class: 'sub' }, g && g.date ? `4H screenshot sweep · ${g.date}${g.time ? ' · ' + g.time + ' SGT run' : ''}` : '')));
+  const watches = ((tw && tw.watches) || []).filter(w => matches(S.q, w.sym));
+  if (watches.length) root.appendChild(h('div', { style: { marginBottom: '14px' } }, tradeWatchCard(watches)));
+  const watchBySym = Object.fromEntries(watches.filter(w => w.status === 'active').map(w => [w.sym, w]));
   const syms = cfg ? cfg.symbols : ((g && g.entries) || []).map(e => e.sym);
   if (!syms.length) {
     root.appendChild(empty('Watchlist is empty — open an instrument from Signals and use ＋ Watchlist.'));
@@ -968,7 +1103,8 @@ async function viewMyWatchlist(root) {
   root.appendChild(card('4H chart screenshots', `${list.length} of ${syms.length}`,
     list.length ? h('div', { class: 'wgrid' }, list.map(sym => { const e = shots[sym]; return h('div', { class: 'wcard' },
       e && e.img ? h('img', { src: '/images/' + e.img, loading: 'lazy', alt: `${sym} 4H chart`, dataset: { full: '/images/' + e.img, cap: `${sym} · 4H · ${g.date}` } }) : h('div', { class: 'empty' }, 'Chart appears after the next 4H sweep'),
-      h('div', { class: 'wb' }, symChip(sym), h('button', { class: 'iconbtn', style: { marginLeft: 'auto' }, title: `Remove ${sym} from watchlist`, onclick: () => rm(sym) }, '✕'))); })) : empty('Nothing matches')));
+      h('div', { class: 'wb' }, symChip(sym), watchBySym[sym] ? watchStateBadge(watchBySym[sym]) : null,
+        h('button', { class: 'iconbtn', style: { marginLeft: 'auto' }, title: `Remove ${sym} from watchlist`, onclick: () => rm(sym) }, '✕'))); })) : empty('Nothing matches')));
 }
 
 // ============================================================ views: PORTFOLIO
