@@ -68,7 +68,7 @@ run_cli() {
 }
 
 # Check if TradingView process is currently running
-TV_PIDS=$(pgrep -f TradingView || true)
+TV_PIDS=$(pgrep -f '^[^ ]*/TradingView\.app/Contents/' || true)  # path-anchored: a bare 'TradingView' also matches agents whose prompt mentions it
 
 # If standalone mode requested or TradingView is not running, start session
 if [ "$STANDALONE" = true ] || [ -z "$TV_PIDS" ]; then

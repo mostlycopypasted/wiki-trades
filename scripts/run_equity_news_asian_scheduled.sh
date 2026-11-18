@@ -121,10 +121,10 @@ python3 scripts/lint_images.py --fix 2>&1 || true
 # run does drive TradingView (full watchlist screenshot batch), so the
 # cleanup is still justified here, unlike the US/EU sibling script.
 echo "=== $(date '+%Y-%m-%d %H:%M:%S %Z') — unconditional TradingView/process cleanup ==="
-pkill -9 -f "tv_session.sh" 2>/dev/null || true
-pkill -9 -f "cli/index.js" 2>/dev/null || true
-pkill -9 -f "capture_tv_chart.sh" 2>/dev/null || true
-pkill -9 -f "TradingView" 2>/dev/null || true
+pkill -9 -f '^[^ ]*bash [^ ]*tv_session\.sh' 2>/dev/null || true
+pkill -9 -f '^[^ ]*node [^ ]*cli/index\.js' 2>/dev/null || true
+pkill -9 -f '^[^ ]*bash [^ ]*capture_tv_chart\.sh' 2>/dev/null || true
+pkill -9 -f '^[^ ]*/TradingView\.app/Contents/' 2>/dev/null || true
 rm -rf /tmp/tradingview-desktop-cdp.lock 2>/dev/null || true
 
 exit $EQUITY_EXIT

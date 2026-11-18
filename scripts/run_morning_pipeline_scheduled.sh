@@ -123,10 +123,10 @@ fi
 # node/TradingView processes behind. See the residual-risk note above re:
 # the hourly TAT job sharing TradingView.
 echo "=== $(date '+%Y-%m-%d %H:%M:%S %Z') — unconditional TradingView/process cleanup before daily brief ==="
-pkill -9 -f "tv_session.sh" 2>/dev/null || true
-pkill -9 -f "cli/index.js" 2>/dev/null || true
-pkill -9 -f "capture_tv_chart.sh" 2>/dev/null || true
-pkill -9 -f "TradingView" 2>/dev/null || true
+pkill -9 -f '^[^ ]*bash [^ ]*tv_session\.sh' 2>/dev/null || true
+pkill -9 -f '^[^ ]*node [^ ]*cli/index\.js' 2>/dev/null || true
+pkill -9 -f '^[^ ]*bash [^ ]*capture_tv_chart\.sh' 2>/dev/null || true
+pkill -9 -f '^[^ ]*/TradingView\.app/Contents/' 2>/dev/null || true
 # A killed tv_session.sh/capture_tv_chart.sh process above may have been
 # holding the CDP session lock (added 2026-08-27, see tv_session.sh) --
 # tv_session.sh's own stale-PID check would catch this on the next acquire
